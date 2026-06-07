@@ -1,0 +1,68 @@
+[
+  {
+    "id": "GLD-N001",
+    "name": "Celestial Gold Necklace",
+    "purity": "22K",
+    "weight": 45,
+    "makingCharge": 0.12,
+    "fixedValue": 0,
+    "category": "Necklace",
+    "description": "A traditional 22K gold necklace with intricate floral patterns and master micro-engravings.",
+    "image": "https://lh3.googleusercontent.com/aida-public/AB6AXuCha9Ynml10tNBki2Fl7ztbI88mZkjLfRLtvbi72A7nazJJ2X9VlxZIeLm1Cgifx9juC4ydETB5LurDTT-SzL9LV3NwD8nLPi2vK-b5wP7L1n-F6ezEEKp3Sm8Iem8t5giibW7xpo72nQvfEu3C-lfUTxRuA3c6g0s0JaUOai63fjErF7_2zvd5AJWu3bY6TR04DCi0GHmWFEsgzy7u92Ic8mJRnVWtF8OMtknCD7_7XfWQpXfoPAZp_JS1WuINjPckJ8JZpAAJsFkg"
+  },
+  {
+    "id": "GLD-R002",
+    "name": "Stellar Diamond Ring",
+    "purity": "18K",
+    "weight": 5,
+    "makingCharge": 0.15,
+    "fixedValue": 55000,
+    "category": "Ring",
+    "description": "An elegant solitaire diamond ring featuring an 18K white gold band and VVS1 clarity diamond.",
+    "image": "https://lh3.googleusercontent.com/aida-public/AB6AXuCm_t9DVfhRmHQQsRgEsPVSGSZnFQLVnMr02p9cVp7NvEAibllcOCxGJKeiCwNhES4WYquGxWVdFndLjAG6x8J7ZqBNIgUSyRlzz5C4dGPhnHMjzzb5ZbBuzLiHAp3-54j9Qjvwanrh8Un4k7ihsTsIhxRi6oivwmOawJIGyJiUq41S2hSzX9-ps12A8F7WBKab7Q9NpXuZgw2VMr5aBqyOBTJMpOYP5BGrc7P4MBOBTHIezD-etc1JEwLbHMqDNyD7j5RLJxISl4R0"
+  },
+  {
+    "id": "GLD-B003",
+    "name": "Infinity Gold Bracelet",
+    "purity": "22K",
+    "weight": 25,
+    "makingCharge": 0.10,
+    "fixedValue": 0,
+    "category": "Bracelet",
+    "description": "A luxurious solid 22K gold bracelet with hand-engraved motifs and a warm yellow gold luster.",
+    "image": "https://lh3.googleusercontent.com/aida-public/AB6AXuBP_z2hnwfcctgyPB3t6TLAzOoV2n6jTbfOn0TvgnfTMwjWkZ4nZeuk-q7gnw49UN7Si0YnVU-OAw3YUzw65u8k9YFDFuOKY5nhliXCjSdS4IApkWSZo1_fSlc1iTqqBQMfkTxU0AtWJGduQRV8IQ94LXjkWe3ccpSF4j4Yfpmdrmga59D5Lyw8YnPGv_CEDyQtpaHytwVlUEkD9-wUG4TCB4L9oQv-IuXk7YGYA3-NnKP8tCqO1nTSSDYhJerJt5yRluqcWIMTrCd0"
+  },
+  {
+    "id": "GLD-N004",
+    "name": "Royal Antique Choker",
+    "purity": "22K",
+    "weight": 60,
+    "makingCharge": 0.18,
+    "fixedValue": 0,
+    "category": "Necklace",
+    "description": "An opulent heritage bridal choker, hand-crafted with antique finish and royal gold detailing.",
+    "image": "https://lh3.googleusercontent.com/aida-public/AB6AXuBBqBs518In3SUYualaIMEYO0yO3fLmu6oI_dW3e36f2Bvje8CQdzqmPvLH6IQ5vb59cB9CZ6w0k45ssuzEk7v1EbGIsbQFCExTThysGa_x99MToAMhsbhwxcXYlli-jAOdeDj3JYYWyd9HEcD62n_XdHQrqfOGByMRTidBrMk1-ywEsZK9js4mK-k7uTwNjjNZGztr0Mm6T3xmkkeDw_JWBvEjC46bUHxYLZrcSg2nW6fpBeXTcczo7BidQItoPe0KZSC9LFFsvQUy"
+  },
+  {
+    "id": "GLD-E005",
+    "name": "Celestial Pearl Earrings",
+    "purity": "18K",
+    "weight": 8,
+    "makingCharge": 0.12,
+    "fixedValue": 15000,
+    "category": "Earrings",
+    "description": "Exquisite 18K gold earrings adorned with hanging natural saltwater pearls and ruby accents.",
+    "image": "https://lh3.googleusercontent.com/aida-public/AB6AXuB-7jcCaNLDQuBNJKP_7sHpy8Xdwm0tbDycRpl8sRzfH90FsCRewJpFeCHXjLzqZEAxGiD9BCfNRDyJVNVBKbG0arly3lt-LauLRGAaPCzanmAClOEpr1ehROd1Vip6Ax9nbMy7s1l-FvenBqixzFeObH6q6QYPryD2lId32wk6yEJgjNB7P5QVxiKvsLewClu0J91lty3X-JKt7L4VSl7DG-Pqfw9C5nMJsZxUvnshWPh7pITQxFz1J_SLf2xOvUWwcecN_Z4QbBc9"
+  },
+  {
+    "id": "GLD-W006",
+    "name": "Classic Gold Chrono",
+    "purity": "18K",
+    "weight": 80,
+    "makingCharge": 0.15,
+    "fixedValue": 250000,
+    "category": "Watch",
+    "description": "A masterwork luxury watch with a solid 18K gold case, automatic movement, and sapphire dial.",
+    "image": "https://lh3.googleusercontent.com/aida-public/AB6AXuBigzrGMZXvmWQsz35IJlpiqICoVSTCYbb8jljp2g0o7_eAktF_SpDCW8eOMzFC7qEh0WcDlwCgvpibI1cHAe21nsnQnxLSkXaSanQpWvxLW-st8ncCtaBkrU-MS0G3stJRzzyMgAECa7BLEXdEvWeHyxjZ9L2ZEwzbMggx7XY7ov2CFccRifo63nmwxdOy6SEpyUxaq9wPh4vr2vfGRytxsSXI6t_iCuDo84EAw8T21fe4noKe23ykZWLEBL4oXsTdjIoiE5CixoP3"
+  }
+]
