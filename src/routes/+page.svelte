@@ -284,6 +284,176 @@
     };
   });
 
+  // Merchant Stock Entry state variables (Svelte 5 runes)
+  let entryCategory = $state('Ring');
+  let entryPurity = $state('22K');
+  let entryWeight = $state('');
+  let entryMakingCharge = $state('12'); // %
+  let entryFixedValue = $state('0'); // ₹
+  let entryName = $state('');
+  let entryDescription = $state('');
+  let isNameDirty = $state(false);
+  let isDescriptionDirty = $state(false);
+  let formError = $state('');
+  let formSuccess = $state('');
+
+  // Code 39 Encoding Table
+  const code39Map = {
+    '0': '000110100', '1': '100100001', '2': '001100001', '3': '101100000',
+    '4': '000110001', '5': '100110000', '6': '001110000', '7': '000100101',
+    '8': '100100100', '9': '001100100', 'A': '100001001', 'B': '001001001',
+    'C': '101001000', 'D': '000011001', 'E': '100011000', 'F': '001011000',
+    'G': '000001101', 'H': '100001100', 'I': '001001100', 'J': '000011100',
+    'K': '100000011', 'L': '001000011', 'M': '101000010', 'N': '000010011',
+    'O': '100010010', 'P': '001010010', 'Q': '000000111', 'R': '100000110',
+    'S': '001000110', 'T': '000010110', 'U': '110000001', 'V': '011000001',
+    'W': '111000000', 'X': '010010001', 'Y': '110010000', 'Z': '011010000',
+    '-': '010000101', '.': '110000100', ' ': '011000100', '$': '010101000',
+    '/': '010100010', '+': '010001010', '%': '000101010', '*': '010010100'
+  };
+
+  // Code 39 SVG Generator
+  function generateCode39SVG(text) {
+    const narrowWidth = 1.5;
+    const wideWidth = 3.75;
+    const height = 40;
+    const cleanText = '*' + text.toUpperCase().replace(/[^0-9A-Z\-.\s$/+%]/g, '') + '*';
+    
+    let x = 10;
+    let rects = [];
+    
+    for (let i = 0; i < cleanText.length; i++) {
+      const char = cleanText[i];
+      const pattern = code39Map[char];
+      if (!pattern) continue;
+      
+      for (let j = 0; j < 9; j++) {
+        const isWide = pattern[j] === '1';
+        const width = isWide ? wideWidth : narrowWidth;
+        const isBar = j % 2 === 0;
+        
+        if (isBar) {
+          rects.push(`<rect x="${x}" y="5" width="${width}" height="${height}" fill="black" />`);
+        }
+        x += width;
+      }
+      x += narrowWidth; // Inter-character gap
+    }
+    
+    const totalWidth = x + 10;
+    const svgContent = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${totalWidth} 60" width="100%" height="100%"><rect width="${totalWidth}" height="60" fill="white" />${rects.join('')}<text x="${totalWidth / 2}" y="54" font-family="monospace" font-size="8" text-anchor="middle" fill="black">${text}</text></svg>`;
+    
+    const dataUri = 'data:image/svg+xml;base64,' + btoa(unescape(encodeURIComponent(svgContent.trim())));
+    return { svgContent, dataUri, totalWidth };
+  }
+
+  // Reactive unique barcode generator
+  let generatedBarcodeID = $derived.by(() => {
+    const prefixMap = {
+      'Ring': 'RNG',
+      'Necklace': 'NKL',
+      'Bracelet': 'BRC',
+      'Earrings': 'ERR',
+      'Watch': 'WCH'
+    };
+    const prefix = prefixMap[entryCategory] || 'GEN';
+    
+    const now = new Date();
+    const yyyy = now.getFullYear();
+    const mm = String(now.getMonth() + 1).padStart(2, '0');
+    const dd = String(now.getDate()).padStart(2, '0');
+    const dateStr = `${yyyy}${mm}${dd}`;
+    
+    let seq = 1;
+    let candidate = '';
+    let conflict = true;
+    while (conflict) {
+      const seqStr = String(seq).padStart(3, '0');
+      candidate = `${prefix}-${dateStr}-${seqStr}`;
+      conflict = products.some(p => p.id === candidate);
+      if (conflict) {
+        seq++;
+      }
+    }
+    return candidate;
+  });
+
+  let barcodeData = $derived(generateCode39SVG(generatedBarcodeID));
+  let autoName = $derived(`${entryPurity} Gold ${entryCategory}`);
+  let displayName = $derived(isNameDirty ? entryName : autoName);
+  let autoDesc = $derived(`Hand-crafted ${entryPurity} gold ${entryCategory.toLowerCase()} with premium finish.`);
+  let displayDesc = $derived(isDescriptionDirty ? entryDescription : autoDesc);
+
+  // Reactive Total Silver Weight
+  let totalSilverWeight = $derived(
+    products.filter(p => p.purity === 'Silver' || p.category === 'Silver').reduce((acc, p) => acc + p.weight, 0)
+  );
+
+  // Form submission handler to persistently save new stock item
+  async function addStockItem(e) {
+    if (e) e.preventDefault();
+    formError = '';
+    formSuccess = '';
+    
+    const weightNum = parseFloat(entryWeight);
+    if (isNaN(weightNum) || weightNum <= 0) {
+      formError = 'Please enter a valid weight in grams.';
+      return;
+    }
+    
+    const makingChargeNum = parseFloat(entryMakingCharge);
+    if (isNaN(makingChargeNum) || makingChargeNum < 0) {
+      formError = 'Please enter a valid making charge percentage.';
+      return;
+    }
+    
+    const fixedValueNum = parseFloat(entryFixedValue || 0);
+    if (isNaN(fixedValueNum) || fixedValueNum < 0) {
+      formError = 'Please enter a valid gemstone/accent value.';
+      return;
+    }
+    
+    const newItem = {
+      id: generatedBarcodeID,
+      name: displayName,
+      purity: entryPurity,
+      weight: weightNum,
+      makingCharge: makingChargeNum / 100, // store as fraction
+      fixedValue: fixedValueNum,
+      category: entryCategory,
+      description: displayDesc,
+      image: barcodeData.dataUri
+    };
+    
+    try {
+      const response = await fetch('/api/products', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(newItem)
+      });
+      
+      const result = await response.json();
+      if (result.success) {
+        products = [...products, result.product];
+        formSuccess = `Product ${result.product.id} successfully added to inventory!`;
+        
+        // Reset inputs
+        entryWeight = '';
+        entryMakingCharge = '12';
+        entryFixedValue = '0';
+        entryName = '';
+        entryDescription = '';
+        isNameDirty = false;
+        isDescriptionDirty = false;
+      } else {
+        formError = result.error || 'Failed to save product to persistent storage.';
+      }
+    } catch (err) {
+      console.error(err);
+      formError = 'Network error: Failed to save product.';
+    }
+  }
+
   // Modal open helper
   function openBreakdown(product) {
     selectedProduct = product;
@@ -301,7 +471,160 @@
   }
 </script>
 
+<style>
+  /* Scoped style enhancements for Stock Entry Panel & Sidebar Rates */
+  .entry-form-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+  }
+  
+  .form-full-width {
+    grid-column: span 2;
+  }
+  
+  @media (max-width: 600px) {
+    .entry-form-grid {
+      grid-template-columns: 1fr;
+    }
+    .form-full-width {
+      grid-column: span 1;
+    }
+  }
 
+  .barcode-preview-card {
+    background: var(--color-surface-lowest);
+    border: 1px dashed var(--color-primary);
+    border-radius: var(--radius-sm);
+    padding: 16px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    min-height: 120px;
+    margin-top: 12px;
+    text-align: center;
+  }
+
+  .barcode-svg-container {
+    background-color: white;
+    padding: 8px;
+    border-radius: var(--radius-sm);
+    max-width: 100%;
+    height: auto;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+  }
+
+  .alert-box {
+    padding: 12px 16px;
+    border-radius: var(--radius-sm);
+    font-size: 13px;
+    margin-bottom: 16px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    animation: fadeIn 0.3s ease-out;
+  }
+
+  .alert-error {
+    background-color: rgba(255, 180, 171, 0.1);
+    color: var(--color-error);
+    border: 1px solid rgba(255, 180, 171, 0.25);
+  }
+
+  .alert-success {
+    background-color: rgba(76, 175, 80, 0.1);
+    color: var(--color-success);
+    border: 1px solid rgba(76, 175, 80, 0.25);
+  }
+
+  /* Unified Bullion Rates Sidebar Panel */
+  .sidebar-rate-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 12px 0;
+    border-bottom: 1px solid rgba(153, 144, 124, 0.1);
+    transition: var(--transition-smooth);
+  }
+  
+  .sidebar-rate-row:last-child {
+    border-bottom: none;
+  }
+
+  .sidebar-rate-row:hover {
+    background-color: rgba(242, 202, 80, 0.03);
+    padding-left: 4px;
+    padding-right: 4px;
+  }
+
+  .rate-row-left {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+
+  .rate-purity-badge {
+    font-size: 10px;
+    font-weight: 700;
+    padding: 4px 8px;
+    border-radius: var(--radius-sm);
+    text-transform: uppercase;
+  }
+
+  .rate-value-display {
+    font-family: var(--font-headline);
+    font-size: 18px;
+    font-weight: 600;
+    color: var(--color-on-background);
+  }
+
+  /* Enhanced Inventory Summary Stats */
+  .inventory-summary-grid {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 16px;
+  }
+
+  .summary-stat-card {
+    background: var(--color-surface-lowest);
+    border: 1px solid var(--color-outline-variant);
+    border-radius: var(--radius-sm);
+    padding: 16px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    transition: var(--transition-smooth);
+  }
+
+  .summary-stat-card:hover {
+    border-color: rgba(242, 202, 80, 0.2);
+  }
+
+  .summary-stat-label {
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--color-on-surface-variant);
+  }
+
+  .summary-stat-value {
+    font-size: 18px;
+    font-weight: 700;
+    color: var(--color-on-background);
+    text-align: right;
+  }
+
+  .summary-stat-subvalue {
+    font-size: 11px;
+    color: var(--color-on-surface-variant);
+    font-weight: normal;
+    display: block;
+  }
+</style>
 
 <div class="dashboard-container">
   <div class="dashboard-header">
@@ -317,94 +640,171 @@
     </div>
   </div>
 
-  <!-- Bullion Metrics Grid -->
-  <div class="metrics-grid">
-    <div class="metric-card">
-      <span class="metric-badge badge-gold">24 Carat</span>
-      <span class="metric-label">Gold Price (1g)</span>
-      <span class="metric-value">{formatCurrency(activeGold24k)}</span>
-    </div>
-    
-    <div class="metric-card">
-      <span class="metric-badge badge-gold">22 Carat</span>
-      <span class="metric-label">Gold Price (1g)</span>
-      <span class="metric-value">{formatCurrency(activeGold22k)}</span>
-    </div>
-    
-    <div class="metric-card">
-      <span class="metric-badge badge-gold">18 Carat</span>
-      <span class="metric-label">Gold Price (1g)</span>
-      <span class="metric-value">{formatCurrency(activeGold18k)}</span>
-    </div>
-    
-    <div class="metric-card">
-      <span class="metric-badge badge-gold">99.9% Purity</span>
-      <span class="metric-label">Silver Price (1g)</span>
-      <span class="metric-value">₹{activeSilver}</span>
-    </div>
-  </div>
-
-  <!-- Owner Dashboard Rate Override Controls -->
-  <div class="controls-panel">
-    <div class="control-group">
-      <span class="control-label">Manual Rate Override</span>
-      <label class="switch-container" aria-label="Toggle Manual Rate Override">
-        <input class="switch-input" type="checkbox" bind:checked={isOverride} />
-        <span class="switch-slider"></span>
-      </label>
-    </div>
-
-    {#if isOverride}
-      <div class="override-inputs">
-        <div class="override-field">
-          <label for="gold-override-input">Override Gold 24K (₹/1g)</label>
-          <input id="gold-override-input" class="input-number" type="number" bind:value={customGold24k} min="5000" max="30000" />
-        </div>
-        <div class="override-field">
-          <label for="silver-override-input">Override Silver (₹/1g)</label>
-          <input id="silver-override-input" class="input-number" type="number" bind:value={customSilver} step="0.1" min="100" max="500" />
-        </div>
-        <div style="align-self: flex-end;">
-          <button class="btn btn-primary btn-small" onclick={() => { customGold24k = gold24k; customSilver = silver; }} style="padding: 9px 16px;">
-            Sync to Live
-          </button>
-        </div>
-      </div>
-    {:else}
-      <div style="font-size: 12px; color: var(--color-on-surface-variant); display: flex; align-items: center; gap: 8px;">
-        <span class="material-symbols-outlined" style="font-size: 16px; color: var(--color-primary);">info</span>
-        Inventory valuations are dynamically updating from live spot market rates. Toggle switch to enter custom bullion rates.
-      </div>
-    {/if}
-  </div>
-
-  <!-- Main Grid: Stock Valuation Table + Right Tools Sidebar -->
   <div class="dashboard-grid">
-    
-    <!-- Left Column: Inventory Valuation Table -->
-    <div class="panel">
-      <div class="panel-header">
-        <div style="display: flex; align-items: center; gap: 16px; width: 100%; justify-content: space-between;">
-          <h2 class="panel-title">Stock Valuation Catalog</h2>
+    <!-- Left Column: Stock Entry & Stock Catalog -->
+    <div style="display: flex; flex-direction: column; gap: 24px;">
+      
+      <!-- Merchant Stock Entry Panel -->
+      <div class="panel">
+        <h2 class="panel-title" style="margin-bottom: 16px; border-bottom: 1px solid rgba(153, 144, 124, 0.15); padding-bottom: 8px; display: flex; align-items: center; gap: 8px;">
+          <span class="material-symbols-outlined" style="color: var(--color-primary);">inventory_2</span>
+          Merchant Stock Entry
+        </h2>
+        
+        {#if formError}
+          <div class="alert-box alert-error">
+            <span class="material-symbols-outlined" style="font-size: 18px;">error</span>
+            <span>{formError}</span>
+          </div>
+        {/if}
+        
+        {#if formSuccess}
+          <div class="alert-box alert-success">
+            <span class="material-symbols-outlined" style="font-size: 18px;">check_circle</span>
+            <span>{formSuccess}</span>
+          </div>
+        {/if}
+        
+        <form onsubmit={addStockItem} class="calc-form">
+          <div class="entry-form-grid">
+            <div class="calc-row">
+              <label for="entry-category-select">Product Category</label>
+              <select id="entry-category-select" class="select-input" bind:value={entryCategory}>
+                <option value="Ring">Ring</option>
+                <option value="Necklace">Necklace</option>
+                <option value="Bracelet">Bracelet</option>
+                <option value="Earrings">Earrings</option>
+                <option value="Watch">Watch</option>
+              </select>
+            </div>
+            
+            <div class="calc-row">
+              <label for="entry-purity-select">Gold Quality / Purity</label>
+              <select id="entry-purity-select" class="select-input" bind:value={entryPurity}>
+                <option value="24K">24K Gold (99.9%)</option>
+                <option value="22K">22K Gold (91.6%)</option>
+                <option value="18K">18K Gold (75.0%)</option>
+              </select>
+            </div>
+            
+            <div class="calc-row">
+              <label for="entry-weight-input">Weight (grams)</label>
+              <input 
+                id="entry-weight-input" 
+                class="calc-input" 
+                type="number" 
+                step="0.001" 
+                min="0.001" 
+                bind:value={entryWeight} 
+                placeholder="0.00" 
+                required 
+              />
+            </div>
+            
+            <div class="calc-row">
+              <label for="entry-making-input">Making Charges (%)</label>
+              <input 
+                id="entry-making-input" 
+                class="calc-input" 
+                type="number" 
+                step="0.1" 
+                min="0" 
+                bind:value={entryMakingCharge} 
+                placeholder="12.0" 
+                required 
+              />
+            </div>
+            
+            <div class="calc-row">
+              <label for="entry-fixed-input">Gem/Accents Value (₹)</label>
+              <input 
+                id="entry-fixed-input" 
+                class="calc-input" 
+                type="number" 
+                min="0" 
+                bind:value={entryFixedValue} 
+                placeholder="0" 
+              />
+            </div>
+
+            <div class="calc-row">
+              <span style="font-size: 11px; font-weight: 600; text-transform: uppercase; color: var(--color-on-surface-variant); letter-spacing: 0.05em; margin-bottom: 6px; display: block;">Generated Barcode ID</span>
+              <div class="calc-input" style="background-color: var(--color-surface-lowest); border-color: var(--color-outline-variant); font-family: monospace; letter-spacing: 1px; color: var(--color-primary); display: flex; align-items: center;">
+                {generatedBarcodeID}
+              </div>
+            </div>
+
+            <div class="calc-row form-full-width">
+              <label for="entry-name-input">Product Name</label>
+              <input 
+                id="entry-name-input" 
+                type="text" 
+                class="calc-input" 
+                value={isNameDirty ? entryName : autoName} 
+                oninput={(e) => { 
+                  entryName = e.target.value; 
+                  isNameDirty = e.target.value.trim() !== ''; 
+                }}
+                placeholder="e.g. Celestial Gold Ring"
+              />
+            </div>
+
+            <div class="calc-row form-full-width">
+              <label for="entry-desc-textarea">Description</label>
+              <textarea 
+                id="entry-desc-textarea" 
+                class="calc-input" 
+                style="resize: vertical; min-height: 60px;"
+                value={isDescriptionDirty ? entryDescription : autoDesc} 
+                oninput={(e) => { 
+                  entryDescription = e.target.value; 
+                  isDescriptionDirty = e.target.value.trim() !== ''; 
+                }}
+                placeholder="Enter item description..."
+              ></textarea>
+            </div>
+          </div>
           
-          <!-- Category Tabs -->
-          <div style="display: flex; gap: 6px; overflow-x: auto; padding: 4px 0;">
-            {#each categories as cat}
-              <button 
-                class="btn btn-secondary btn-small {activeCategory === cat ? 'active' : ''}" 
-                style="padding: 6px 12px; font-size: 10px; border-radius: var(--radius-full); border-color: {activeCategory === cat ? 'var(--color-primary)' : 'rgba(153, 144, 124, 0.15)'}; color: {activeCategory === cat ? 'var(--color-primary)' : ''};"
-                onclick={() => activeCategory = cat}
-              >
-                {cat === 'All' ? 'All Items' : cat}
-              </button>
-            {/each}
+          <div class="barcode-preview-card">
+            <span style="font-size: 10px; text-transform: uppercase; color: var(--color-on-surface-variant); letter-spacing: 0.1em; margin-bottom: 8px;">Real-Time Barcode Sticker Preview</span>
+            <div class="barcode-svg-container">
+              {@html barcodeData.svgContent}
+            </div>
+          </div>
+          
+          <button type="submit" class="btn btn-primary" style="width: 100%; margin-top: 8px; display: flex; align-items: center; justify-content: center; gap: 8px;">
+            <span class="material-symbols-outlined" style="font-size: 16px;">add_box</span>
+            Add Item to Stock
+          </button>
+        </form>
+      </div>
+
+      <!-- Stock Valuation Catalog Panel -->
+      <div class="panel">
+        <div class="panel-header">
+          <div style="display: flex; align-items: center; gap: 16px; width: 100%; justify-content: space-between; flex-wrap: wrap;">
+            <h2 class="panel-title" style="display: flex; align-items: center; gap: 8px;">
+              <span class="material-symbols-outlined" style="color: var(--color-primary);">list_alt</span>
+              Stock Valuation Catalog
+            </h2>
+            
+            <!-- Category Tabs -->
+            <div style="display: flex; gap: 6px; overflow-x: auto; padding: 4px 0;">
+              {#each categories as cat}
+                <button 
+                  class="btn btn-secondary btn-small {activeCategory === cat ? 'active' : ''}" 
+                  style="padding: 6px 12px; font-size: 10px; border-radius: var(--radius-full); border-color: {activeCategory === cat ? 'var(--color-primary)' : 'rgba(153, 144, 124, 0.15)'}; color: {activeCategory === cat ? 'var(--color-primary)' : ''};"
+                  onclick={() => activeCategory = cat}
+                >
+                  {cat === 'All' ? 'All Items' : cat}
+                </button>
+              {/each}
+            </div>
           </div>
         </div>
-      </div>
 
-      <!-- Search & Valuation Totals -->
-      <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 16px; margin-bottom: 20px;">
-        <div style="position: relative; flex-grow: 1; max-width: 400px;">
+        <!-- Search Input -->
+        <div style="position: relative; margin-bottom: 20px;">
           <input 
             class="calc-input" 
             style="padding-left: 36px;" 
@@ -415,80 +815,191 @@
           />
           <span class="material-symbols-outlined" style="position: absolute; left: 10px; top: 10px; font-size: 18px; color: var(--color-on-surface-variant); opacity: 0.6;">search</span>
         </div>
-        
-        <div style="display: flex; gap: 32px; background-color: var(--color-surface-lowest); padding: 12px 24px; border-radius: var(--radius-sm); border: 1px solid var(--color-outline-variant);">
-          <div style="display: flex; flex-direction: column;">
-            <span style="font-size: 10px; text-transform: uppercase; color: var(--color-on-surface-variant); letter-spacing: 0.05em;">Total Gold Weight</span>
-            <span style="font-size: 18px; font-weight: 700; color: var(--color-on-background);">{totalGoldWeight} g</span>
-          </div>
-          <div style="display: flex; flex-direction: column; border-left: 1px solid rgba(153, 144, 124, 0.15); padding-left: 32px;">
-            <span style="font-size: 10px; text-transform: uppercase; color: var(--color-on-surface-variant); letter-spacing: 0.05em;">Current Stock Value</span>
-            <span style="font-size: 18px; font-weight: 700; color: var(--color-primary);">{formatCurrency(totalStockValuation)}</span>
-          </div>
-        </div>
-      </div>
 
-      <!-- Inventory Table -->
-      <div class="table-responsive">
-        <table class="data-table">
-          <thead>
-            <tr>
-              <th>ID</th>
-              <th>Thumbnail</th>
-              <th>Product Details</th>
-              <th>Purity</th>
-              <th>Weight</th>
-              <th>Metal Value</th>
-              <th>Making Charge</th>
-              <th>GST (3%)</th>
-              <th>Owner Valuation</th>
-              <th>Actions</th>
-            </tr>
-          </thead>
-          <tbody>
-            {#each filteredProducts as product (product.id)}
+        <!-- Inventory Table -->
+        <div class="table-responsive">
+          <table class="data-table">
+            <thead>
               <tr>
-                <td><span class="id-badge">{product.id}</span></td>
-                <td>
-                  <img class="thumbnail" src={product.image} alt={product.name} />
-                </td>
-                <td>
-                  <div style="font-weight: 600; color: var(--color-on-background);">{product.name}</div>
-                  <div style="font-size: 10px; color: var(--color-on-surface-variant);">{product.category}</div>
-                </td>
-                <td>{product.purity}</td>
-                <td>{product.weight} g</td>
-                <td>{formatCurrency(product.metalValue)}</td>
-                <td>
-                  {formatCurrency(product.makingCharges)}
-                  <div style="font-size: 9px; color: var(--color-on-surface-variant); opacity: 0.8;">({Math.round(product.makingCharge * 100)}%)</div>
-                </td>
-                <td>{formatCurrency(product.gst)}</td>
-                <td><span class="price-val">{formatCurrency(product.totalPrice)}</span></td>
-                <td>
-                  <button class="btn btn-secondary btn-small" style="padding: 6px 12px; font-size: 10px;" onclick={() => openBreakdown(product)}>
-                    Full Audit
-                  </button>
-                </td>
+                <th>ID</th>
+                <th>Thumbnail / Barcode</th>
+                <th>Product Details</th>
+                <th>Purity</th>
+                <th>Weight</th>
+                <th>Metal Value</th>
+                <th>Making Charge</th>
+                <th>GST (3%)</th>
+                <th>Owner Valuation</th>
+                <th>Actions</th>
               </tr>
-            {:else}
-              <tr>
-                <td colspan="10" style="text-align: center; padding: 32px; color: var(--color-on-surface-variant);">
-                  No items found in stock inventory matching your filters.
-                </td>
-              </tr>
-            {/each}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {#each filteredProducts as product (product.id)}
+                <tr>
+                  <td><span class="id-badge">{product.id}</span></td>
+                  <td>
+                    {#if product.image.startsWith('data:image/svg+xml')}
+                      <div style="width: 70px; height: 35px; background: white; padding: 2px; border-radius: var(--radius-sm); border: 1px solid var(--color-outline-variant); overflow: hidden; display: flex; align-items: center; justify-content: center;">
+                        <img src={product.image} alt="Barcode" style="max-width: 100%; max-height: 100%; object-fit: contain; filter: none;" />
+                      </div>
+                    {:else}
+                      <img class="thumbnail" src={product.image} alt={product.name} />
+                    {/if}
+                  </td>
+                  <td>
+                    <div style="font-weight: 600; color: var(--color-on-background);">{product.name}</div>
+                    <div style="font-size: 10px; color: var(--color-on-surface-variant);">{product.category}</div>
+                  </td>
+                  <td>{product.purity}</td>
+                  <td>{product.weight} g</td>
+                  <td>{formatCurrency(product.metalValue)}</td>
+                  <td>
+                    {formatCurrency(product.makingCharges)}
+                    <div style="font-size: 9px; color: var(--color-on-surface-variant); opacity: 0.8;">({Math.round(product.makingCharge * 100)}%)</div>
+                  </td>
+                  <td>{formatCurrency(product.gst)}</td>
+                  <td><span class="price-val">{formatCurrency(product.totalPrice)}</span></td>
+                  <td>
+                    <button class="btn btn-secondary btn-small" style="padding: 6px 12px; font-size: 10px;" onclick={() => openBreakdown(product)}>
+                      Full Audit
+                    </button>
+                  </td>
+                </tr>
+              {:else}
+                <tr>
+                  <td colspan="10" style="text-align: center; padding: 32px; color: var(--color-on-surface-variant);">
+                    No items found in stock inventory matching your filters.
+                  </td>
+                </tr>
+              {/each}
+            </tbody>
+          </table>
+        </div>
       </div>
     </div>
     
-    <!-- Right Column: Sidebar Tools -->
+    <!-- Right Column: Sidebar (Rates, Totals, Calculator, Logs) -->
     <div style="display: flex; flex-direction: column; gap: 24px;">
       
-      <!-- Calculator Tool -->
+      <!-- Unified Live Bullion Rates Panel -->
       <div class="panel">
-        <h2 class="panel-title" style="margin-bottom: 16px; border-bottom: 1px solid rgba(153, 144, 124, 0.15); padding-bottom: 8px;">Walk-in Calculator</h2>
+        <h2 class="panel-title" style="margin-bottom: 12px; display: flex; align-items: center; justify-content: space-between;">
+          <span style="display: flex; align-items: center; gap: 6px;">
+            <span class="indicator-dot {isOverride ? 'override' : connectionStatus}"></span>
+            Live Bullion Rates
+          </span>
+          <span style="font-size: 10px; font-weight: normal; color: var(--color-on-surface-variant); font-family: monospace;">
+            {timestamp ? timestamp : 'Connecting...'}
+          </span>
+        </h2>
+
+        <div style="display: flex; flex-direction: column; gap: 4px; margin-bottom: 16px;">
+          <div class="sidebar-rate-row">
+            <div class="rate-row-left">
+              <span class="rate-purity-badge badge-gold" style="background-color: rgba(242, 202, 80, 0.15);">24K Gold</span>
+              <span style="font-size: 12px; color: var(--color-on-surface-variant);">99.9% Purity</span>
+            </div>
+            <span class="rate-value-display">{formatCurrency(activeGold24k)}</span>
+          </div>
+          
+          <div class="sidebar-rate-row">
+            <div class="rate-row-left">
+              <span class="rate-purity-badge badge-gold" style="background-color: rgba(242, 202, 80, 0.1);">22K Gold</span>
+              <span style="font-size: 12px; color: var(--color-on-surface-variant);">91.6% Purity</span>
+            </div>
+            <span class="rate-value-display">{formatCurrency(activeGold22k)}</span>
+          </div>
+
+          <div class="sidebar-rate-row">
+            <div class="rate-row-left">
+              <span class="rate-purity-badge badge-gold" style="background-color: rgba(242, 202, 80, 0.05);">18K Gold</span>
+              <span style="font-size: 12px; color: var(--color-on-surface-variant);">75.0% Purity</span>
+            </div>
+            <span class="rate-value-display">{formatCurrency(activeGold18k)}</span>
+          </div>
+
+          <div class="sidebar-rate-row">
+            <div class="rate-row-left">
+              <span class="rate-purity-badge badge-gold" style="background-color: rgba(215, 196, 164, 0.1); color: var(--color-secondary); border-color: rgba(215, 196, 164, 0.2);">Silver</span>
+              <span style="font-size: 12px; color: var(--color-on-surface-variant);">99.9% Pure</span>
+            </div>
+            <span class="rate-value-display">₹{activeSilver}</span>
+          </div>
+        </div>
+
+        <!-- Rate Override Control Inside Bullion Panel -->
+        <div style="border-top: 1px solid rgba(153, 144, 124, 0.15); padding-top: 16px;">
+          <div class="control-group" style="justify-content: space-between; width: 100%; margin-bottom: 12px;">
+            <span class="control-label" style="font-size: 11px;">Manual Override</span>
+            <label class="switch-container" aria-label="Toggle Manual Rate Override">
+              <input class="switch-input" type="checkbox" bind:checked={isOverride} />
+              <span class="switch-slider"></span>
+            </label>
+          </div>
+
+          {#if isOverride}
+            <div class="override-inputs" style="flex-direction: column; align-items: stretch; gap: 12px; width: 100%;">
+              <div class="override-field">
+                <label for="gold-override-input">Override Gold 24K (₹/1g)</label>
+                <input id="gold-override-input" class="input-number" style="width: 100%;" type="number" bind:value={customGold24k} min="5000" max="30000" />
+              </div>
+              <div class="override-field">
+                <label for="silver-override-input">Override Silver (₹/1g)</label>
+                <input id="silver-override-input" class="input-number" style="width: 100%;" type="number" bind:value={customSilver} step="0.1" min="100" max="500" />
+              </div>
+              <button class="btn btn-primary btn-small" onclick={() => { customGold24k = gold24k; customSilver = silver; }} style="width: 100%; padding: 8px 16px;">
+                Sync to Live
+              </button>
+            </div>
+          {:else}
+            <div style="font-size: 11px; color: var(--color-on-surface-variant); display: flex; align-items: flex-start; gap: 6px; line-height: 1.4;">
+              <span class="material-symbols-outlined" style="font-size: 14px; color: var(--color-primary); flex-shrink: 0; margin-top: 1px;">info</span>
+              Valuations dynamically update from live spot rates. Toggle switch to override rates.
+            </div>
+          {/if}
+        </div>
+      </div>
+
+      <!-- Enhanced Total Inventory Summary Panel -->
+      <div class="panel">
+        <h2 class="panel-title" style="margin-bottom: 16px; border-bottom: 1px solid rgba(153, 144, 124, 0.15); padding-bottom: 8px; display: flex; align-items: center; gap: 8px;">
+          <span class="material-symbols-outlined" style="color: var(--color-primary);">analytics</span>
+          Total Inventory Summary
+        </h2>
+        
+        <div class="inventory-summary-grid">
+          <div class="summary-stat-card">
+            <span class="summary-stat-label">Total Gold Weight</span>
+            <div class="summary-stat-value">
+              {totalGoldWeight.toFixed(2)} g
+              <span class="summary-stat-subvalue">{(totalGoldWeight / 1000).toFixed(3)} kg</span>
+            </div>
+          </div>
+          
+          <div class="summary-stat-card">
+            <span class="summary-stat-label">Total Silver Weight</span>
+            <div class="summary-stat-value">
+              {totalSilverWeight.toFixed(2)} g
+              <span class="summary-stat-subvalue">{(totalSilverWeight / 1000).toFixed(3)} kg</span>
+            </div>
+          </div>
+          
+          <div class="summary-stat-card" style="border-color: rgba(242, 202, 80, 0.25); background: linear-gradient(180deg, var(--color-surface-lowest) 0%, rgba(242, 202, 80, 0.02) 100%);">
+            <span class="summary-stat-label" style="color: var(--color-primary);">Current Valuation</span>
+            <div class="summary-stat-value" style="color: var(--color-primary); font-size: 22px;">
+              {formatCurrency(totalStockValuation)}
+              <span class="summary-stat-subvalue" style="color: var(--color-on-surface-variant);">Full inventory sum</span>
+            </div>
+          </div>
+        </div>
+      </div>
+      
+      <!-- Walk-in Calculator Tool -->
+      <div class="panel">
+        <h2 class="panel-title" style="margin-bottom: 16px; border-bottom: 1px solid rgba(153, 144, 124, 0.15); padding-bottom: 8px; display: flex; align-items: center; gap: 8px;">
+          <span class="material-symbols-outlined" style="color: var(--color-primary);">calculate</span>
+          Walk-in Calculator
+        </h2>
         
         <div class="calc-form">
           <div class="calc-row">
@@ -525,7 +1036,10 @@
       <!-- CSV Bullion Logs Console Auditor -->
       <div class="panel">
         <h2 class="panel-title" style="margin-bottom: 12px; display: flex; align-items: center; justify-content: space-between;">
-          Recent CSV Ticks
+          <span style="display: flex; align-items: center; gap: 6px;">
+            <span class="material-symbols-outlined" style="color: var(--color-primary); font-size: 18px;">terminal</span>
+            Recent CSV Ticks
+          </span>
           <span style="font-size: 9px; font-family: monospace; color: var(--color-on-surface-variant); font-weight: normal;">ambicaa_rates.csv</span>
         </h2>
         
