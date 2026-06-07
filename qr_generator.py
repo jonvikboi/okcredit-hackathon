@@ -3,8 +3,10 @@ import barcode
 from barcode.writer import ImageWriter
 from PIL import Image, ImageDraw, ImageFont
 
+import sys
+
 # Item details
-item_id = "GLD000123"
+item_id = sys.argv[1] if len(sys.argv) > 1 else "GLD000123"
 
 # -------------------------
 # Generate QR Code
@@ -64,6 +66,7 @@ draw.text((220, 240), item_id, fill="black", font=font)
 draw.text((220, 410), item_id, fill="black", font=font)
 
 # Save final label
-label.save("GLD000123_label.png")
+output_filename = f"{item_id}_label.png"
+label.save(output_filename)
 
-print("Label created successfully!")
+print(f"Label created successfully: {output_filename}")

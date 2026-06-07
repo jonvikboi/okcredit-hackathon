@@ -1,6 +1,7 @@
 <script>
   import { onMount } from 'svelte';
   import productsData from '$lib/products.json';
+  import QRCode from 'qrcode';
 
   // State variables (Svelte 5 runes)
   let products = $state(productsData);
@@ -297,6 +298,26 @@
   let formError = $state('');
   let formSuccess = $state('');
 
+  // Live QR Code states and generator effect
+  let qrCodeSvg = $state('');
+  let qrCodeDataUri = $state('');
+
+  $effect(() => {
+    if (generatedBarcodeID) {
+      QRCode.toString(generatedBarcodeID, { type: 'svg', margin: 1, width: 120 })
+        .then(svg => {
+          qrCodeSvg = svg;
+        })
+        .catch(err => console.error(err));
+        
+      QRCode.toDataURL(generatedBarcodeID, { margin: 1 })
+        .then(url => {
+          qrCodeDataUri = url;
+        })
+        .catch(err => console.error(err));
+    }
+  });
+
   // Code 39 Encoding Table
   const code39Map = {
     '0': '000110100', '1': '100100001', '2': '001100001', '3': '101100000',
@@ -422,7 +443,8 @@
       fixedValue: fixedValueNum,
       category: entryCategory,
       description: displayDesc,
-      image: barcodeData.dataUri
+      image: barcodeData.dataUri,
+      qrImage: qrCodeDataUri
     };
     
     try {
@@ -765,10 +787,33 @@
             </div>
           </div>
           
-          <div class="barcode-preview-card">
-            <span style="font-size: 10px; text-transform: uppercase; color: var(--color-on-surface-variant); letter-spacing: 0.1em; margin-bottom: 8px;">Real-Time Barcode Sticker Preview</span>
-            <div class="barcode-svg-container">
-              {@html barcodeData.svgContent}
+          <div class="barcode-preview-card" style="display: flex; flex-direction: column; align-items: center; gap: 12px; width: 100%;">
+            <span style="font-size: 10px; text-transform: uppercase; color: var(--color-on-surface-variant); letter-spacing: 0.1em; margin-bottom: 4px;">Real-Time Dual Jewelry Tag Sticker Preview</span>
+            <div style="display: flex; gap: 20px; width: 100%; justify-content: center; flex-wrap: wrap;">
+              
+              <!-- Side A: Barcode Sticker -->
+              <div style="background-color: white; color: black; padding: 12px; border-radius: var(--radius-sm); border: 1px solid var(--color-outline); width: 200px; display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 80px;">
+                <div style="font-size: 8px; font-weight: 700; text-transform: uppercase; margin-bottom: 4px; letter-spacing: 0.5px; color: black;">Ambicaa Jewellers</div>
+                <div class="barcode-svg-container" style="background-color: transparent; padding: 0; width: 100%; height: 35px; display: flex; align-items: center; justify-content: center; overflow: hidden;">
+                  {@html barcodeData.svgContent}
+                </div>
+              </div>
+              
+              <!-- Side B: QR Code & Weights Tag -->
+              <div style="background-color: white; color: black; padding: 12px; border-radius: var(--radius-sm); border: 1px solid var(--color-outline); width: 200px; display: flex; align-items: center; gap: 10px; justify-content: space-between; min-height: 80px;">
+                <div style="display: flex; flex-direction: column; align-items: flex-start; justify-content: center; font-family: monospace; font-size: 9px; line-height: 1.4; color: black; text-align: left;">
+                  <div style="font-weight: 700; font-size: 9px; margin-bottom: 2px; color: black; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 110px;">{displayName}</div>
+                  <div>ID: {generatedBarcodeID}</div>
+                  <div>WT: {entryWeight || '0.00'} g</div>
+                  <div>KT: {entryPurity} Gold</div>
+                </div>
+                {#if qrCodeSvg}
+                  <div style="width: 50px; height: 50px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; background: white; padding: 2px;">
+                    {@html qrCodeSvg}
+                  </div>
+                {/if}
+              </div>
+              
             </div>
           </div>
           
@@ -838,9 +883,9 @@
                 <tr>
                   <td><span class="id-badge">{product.id}</span></td>
                   <td>
-                    {#if product.image.startsWith('data:image/svg+xml')}
-                      <div style="width: 70px; height: 35px; background: white; padding: 2px; border-radius: var(--radius-sm); border: 1px solid var(--color-outline-variant); overflow: hidden; display: flex; align-items: center; justify-content: center;">
-                        <img src={product.image} alt="Barcode" style="max-width: 100%; max-height: 100%; object-fit: contain; filter: none;" />
+                    {#if product.image.startsWith('data:image')}
+                      <div style="width: 70px; height: 35px; background: white; padding: 2px; border-radius: var(--radius-sm); border: 1px solid var(--color-outline-variant); overflow: hidden; display: flex; align-items: center; justify-content: center;" title="Jewelry Label">
+                        <img src={product.image} alt="Label" style="max-width: 100%; max-height: 100%; object-fit: contain; filter: none;" />
                       </div>
                     {:else}
                       <img class="thumbnail" src={product.image} alt={product.name} />
@@ -1071,8 +1116,14 @@
       </button>
       
       <div class="modal-body">
-        <div class="modal-product-img-container">
-          <img class="modal-product-img" src={selectedProduct.image} alt={selectedProduct.name} />
+        <div class="modal-product-img-container" style="background-color: var(--color-surface-lowest); padding: 20px; border-radius: var(--radius-md); display: flex; justify-content: center; align-items: center; width: 100%;">
+          {#if selectedProduct.image.startsWith('data:image')}
+            <div style="background: white; padding: 12px; border-radius: var(--radius-sm); display: flex; align-items: center; justify-content: center; max-height: 250px; max-width: 300px; overflow: hidden;">
+              <img src={selectedProduct.image} alt="Jewelry Tag Label" style="max-width: 100%; max-height: 100%; object-fit: contain;" />
+            </div>
+          {:else}
+            <img class="modal-product-img" src={selectedProduct.image} alt={selectedProduct.name} style="max-height: 150px; object-fit: cover;" />
+          {/if}
         </div>
         
         <div class="modal-details-container">
