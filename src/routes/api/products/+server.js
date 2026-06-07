@@ -2,6 +2,7 @@ import fs from 'fs';
 import path from 'path';
 import { exec } from 'child_process';
 import util from 'util';
+import { getDb } from '$lib/db';
 
 const execPromise = util.promisify(exec);
 
@@ -9,7 +10,6 @@ const execPromise = util.promisify(exec);
 export async function POST({ request }) {
   try {
     const product = await request.json();
-    const jsonPath = path.resolve('src/lib/products.json');
     
     // Execute teammate's python script to generate the tag label image
     try {
@@ -35,17 +35,10 @@ export async function POST({ request }) {
       // Keep going with the default passed image if python fails
     }
     
-    let products = [];
-    if (fs.existsSync(jsonPath)) {
-      const fileContent = fs.readFileSync(jsonPath, 'utf8');
-      products = JSON.parse(fileContent);
-    }
-    
-    // Append the new product
-    products.push(product);
-    
-    // Write back to products.json on disk
-    fs.writeFileSync(jsonPath, JSON.stringify(products, null, 2), 'utf8');
+    // Insert the product record into MongoDB
+    const db = await getDb();
+    const productsCollection = db.collection('products');
+    await productsCollection.insertOne(product);
     
     return new Response(JSON.stringify({ success: true, product }), {
       headers: { 'Content-Type': 'application/json' }

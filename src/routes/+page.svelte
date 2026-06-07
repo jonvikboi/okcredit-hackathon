@@ -1,10 +1,10 @@
 <script>
   import { onMount } from 'svelte';
-  import productsData from '$lib/products.json';
   import QRCode from 'qrcode';
 
-  // State variables (Svelte 5 runes)
-  let products = $state(productsData);
+  // State variables (Svelte 5 runes) received from +page.server.js load
+  let { data } = $props();
+  let products = $state(data.products || []);
   let gold24k = $state(15485); // live rate (₹/g)
   let silver = $state(266.16); // live rate (₹/g)
   let connectionStatus = $state('connecting'); // 'live' | 'polling' | 'connecting'
