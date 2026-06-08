@@ -1,6 +1,5 @@
-import fs from 'fs';
-import path from 'path';
 import { getDb } from '$lib/db';
+import productsJson from '$lib/products.json';
 
 /** @type {import('./$types').PageServerLoad} */
 export async function load() {
@@ -23,23 +22,9 @@ export async function load() {
       products
     };
   } catch (error) {
-    console.error('Failed to load products from MongoDB, falling back to local products.json:', error);
-    
-    try {
-      const jsonPath = path.resolve('src/lib/products.json');
-      if (fs.existsSync(jsonPath)) {
-        const raw = fs.readFileSync(jsonPath, 'utf8');
-        const products = JSON.parse(raw);
-        return {
-          products
-        };
-      }
-    } catch (jsonError) {
-      console.error('Failed to read local products.json fallback:', jsonError);
-    }
-
+    console.error('Failed to load products from MongoDB, falling back to bundled products.json:', error);
     return {
-      products: []
+      products: productsJson
     };
   }
 }
