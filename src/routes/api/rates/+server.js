@@ -26,7 +26,7 @@ export async function GET() {
       
       if (latestRates) {
         const ageInMs = Date.now() - new Date(latestRates.timestamp).getTime();
-        const isStale = ageInMs > 10000; // 10 seconds staleness check
+        const isStale = ageInMs > 5000; // 5 seconds staleness check
         
         if (!isStale) {
           const { _id, id, ...ratesData } = latestRates;
