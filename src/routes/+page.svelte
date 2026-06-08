@@ -410,6 +410,54 @@
     products.filter(p => p.purity === 'Silver' || p.category === 'Silver').reduce((acc, p) => acc + p.weight, 0)
   );
 
+  // Client-side composite label image generator (HTML5 Canvas)
+  // Replicates the layout of the teammate's python script (600x500 PNG)
+  function generateCompositeLabel(itemId, qrUri, barcodeUri) {
+    return new Promise((resolve, reject) => {
+      try {
+        const canvas = document.createElement('canvas');
+        canvas.width = 600;
+        canvas.height = 500;
+        const ctx = canvas.getContext('2d');
+
+        // Fill background with white
+        ctx.fillStyle = 'white';
+        ctx.fillRect(0, 0, 600, 500);
+
+        let loaded = 0;
+        const checkReady = () => {
+          loaded++;
+          if (loaded === 2) {
+            // Draw text details (font size 24px Arial matches python script)
+            ctx.fillStyle = 'black';
+            ctx.font = '24px Arial, sans-serif';
+            ctx.fillText(itemId, 220, 254); // matches draw.text((220, 240)) with baseline offset
+            ctx.fillText(itemId, 220, 424); // matches draw.text((220, 410)) with baseline offset
+            resolve(canvas.toDataURL('image/png'));
+          }
+        };
+
+        const qrImg = new Image();
+        qrImg.onload = () => {
+          ctx.drawImage(qrImg, 190, 20, 220, 220); // matches python paste(qr_img, (190, 20)) after resize to 220x220
+          checkReady();
+        };
+        qrImg.onerror = reject;
+        qrImg.src = qrUri;
+
+        const barImg = new Image();
+        barImg.onload = () => {
+          ctx.drawImage(barImg, 50, 270, 500, 120); // matches python paste(barcode_img, (50, 270)) after resize to 500x120
+          checkReady();
+        };
+        barImg.onerror = reject;
+        barImg.src = barcodeUri;
+      } catch (e) {
+        reject(e);
+      }
+    });
+  }
+
   // Form submission handler to persistently save new stock item
   async function addStockItem(e) {
     if (e) e.preventDefault();
@@ -433,6 +481,13 @@
       formError = 'Please enter a valid gemstone/accent value.';
       return;
     }
+
+    let finalLabelImage = barcodeData.dataUri;
+    try {
+      finalLabelImage = await generateCompositeLabel(generatedBarcodeID, qrCodeDataUri, barcodeData.dataUri);
+    } catch (canvasErr) {
+      console.error('Failed to generate composite label image via canvas:', canvasErr);
+    }
     
     const newItem = {
       id: generatedBarcodeID,
@@ -443,7 +498,7 @@
       fixedValue: fixedValueNum,
       category: entryCategory,
       description: displayDesc,
-      image: barcodeData.dataUri,
+      image: finalLabelImage,
       qrImage: qrCodeDataUri
     };
     
@@ -490,6 +545,132 @@
   function addToBag(product) {
     console.log("Added to bag:", product);
     alert(`${product.name} has been added to your valuation cart.`);
+  }
+
+  // Scanner state variables (Svelte 5 runes)
+  let showScannerModal = $state(false);
+  let scannerError = $state('');
+  let camerasList = $state([]);
+  let activeCameraId = $state('');
+  let scannerInstance = null;
+  let Html5Qrcode = null;
+
+  async function startScanner() {
+    scannerError = '';
+    showScannerModal = true;
+    
+    // Allow DOM to render #webcam-reader div
+    setTimeout(async () => {
+      try {
+        if (!Html5Qrcode) {
+          const module = await import('html5-qrcode');
+          Html5Qrcode = module.Html5Qrcode;
+        }
+
+        scannerInstance = new Html5Qrcode("webcam-reader");
+        
+        // Query available camera devices
+        const devices = await Html5Qrcode.getCameras();
+        if (devices && devices.length > 0) {
+          camerasList = devices;
+          // Look for rear/back camera on mobile devices
+          const backCam = devices.find(device => 
+            device.label.toLowerCase().includes('back') || 
+            device.label.toLowerCase().includes('rear') ||
+            device.label.toLowerCase().includes('environment')
+          );
+          activeCameraId = backCam ? backCam.id : devices[0].id;
+          
+          await startCamera();
+        } else {
+          scannerError = "No camera devices found. Ensure camera permissions are granted.";
+        }
+      } catch (err) {
+        console.error("Scanner initialization failed:", err);
+        scannerError = "Camera access denied or failed: " + err.message;
+      }
+    }, 150);
+  }
+
+  async function startCamera() {
+    if (!scannerInstance || !activeCameraId) return;
+    
+    try {
+      if (scannerInstance.isScanning) {
+        await scannerInstance.stop();
+      }
+      
+      scannerError = '';
+      await scannerInstance.start(
+        activeCameraId,
+        {
+          fps: 15,
+          qrbox: (width, height) => {
+            const minDim = Math.min(width, height);
+            // Dynamic scan box area (70% of screen width, 40% of height for barcodes)
+            return { width: Math.round(minDim * 0.7), height: Math.round(minDim * 0.4) };
+          },
+          aspectRatio: 1.333333
+        },
+        (decodedText) => {
+          handleScanSuccess(decodedText);
+        },
+        (errorMessage) => {
+          // Ignore spammy single frame scan errors
+        }
+      );
+    } catch (err) {
+      console.error("Failed to start camera feed:", err);
+      scannerError = "Failed to start camera feed: " + err.message;
+    }
+  }
+
+  async function stopScanner() {
+    showScannerModal = false;
+    if (scannerInstance) {
+      try {
+        if (scannerInstance.isScanning) {
+          await scannerInstance.stop();
+        }
+      } catch (err) {
+        console.error("Failed to stop camera:", err);
+      }
+      scannerInstance = null;
+    }
+    camerasList = [];
+    activeCameraId = '';
+    scannerError = '';
+  }
+
+  function handleScanSuccess(text) {
+    console.log("Scanned text successfully:", text);
+    
+    // Play a short success beep sound using Web Audio API
+    try {
+      const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      const oscillator = audioCtx.createOscillator();
+      const gainNode = audioCtx.createGain();
+      oscillator.connect(gainNode);
+      gainNode.connect(audioCtx.destination);
+      oscillator.type = 'sine';
+      oscillator.frequency.value = 1200; // 1.2kHz beep
+      gainNode.gain.setValueAtTime(0.08, audioCtx.currentTime);
+      oscillator.start();
+      oscillator.stop(audioCtx.currentTime + 0.08); // 80ms duration
+    } catch (e) {
+      console.warn("Failed to play scan beep sound:", e);
+    }
+
+    // Try to find the matching item in local inventory
+    const matched = products.find(p => p.id.toLowerCase() === text.trim().toLowerCase());
+    
+    if (matched) {
+      searchQuery = text.trim(); // filter catalog
+      openBreakdown(matched); // open detail modal
+      stopScanner();
+    } else {
+      scannerError = `Scanned ID "${text}" but no matching product was found in stock.`;
+    }
   }
 </script>
 
@@ -645,6 +826,83 @@
     color: var(--color-on-surface-variant);
     font-weight: normal;
     display: block;
+  }
+
+  @keyframes scanLine {
+    0% { top: 0%; }
+    50% { top: 100%; }
+    100% { top: 0%; }
+  }
+
+  /* Modal Styles */
+  .modal-backdrop {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    background-color: rgba(0, 0, 0, 0.75);
+    backdrop-filter: blur(8px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+    animation: fadeIn 0.2s ease-out;
+  }
+
+  .modal-backdrop-close {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: transparent;
+    cursor: default;
+    border: none;
+  }
+
+  .modal-content {
+    position: relative;
+    background-color: var(--color-surface);
+    border: 1px solid var(--color-outline-variant);
+    border-radius: var(--radius-lg);
+    width: 90%;
+    max-width: 600px;
+    padding: 32px;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+    z-index: 1010;
+    animation: scaleIn 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+  }
+
+  .modal-close-btn {
+    position: absolute;
+    top: 16px;
+    right: 16px;
+    background: none;
+    border: none;
+    color: var(--color-on-surface-variant);
+    cursor: pointer;
+    transition: var(--transition-smooth);
+    padding: 4px;
+    border-radius: var(--radius-sm);
+  }
+
+  .modal-close-btn:hover {
+    color: var(--color-primary);
+    background-color: rgba(255, 255, 255, 0.05);
+  }
+
+  .modal-body {
+    display: flex;
+    flex-direction: column;
+    gap: 24px;
+    max-height: 80vh;
+    overflow-y: auto;
+  }
+
+  @keyframes scaleIn {
+    from { transform: scale(0.95); opacity: 0; }
+    to { transform: scale(1); opacity: 1; }
   }
 </style>
 
@@ -848,17 +1106,29 @@
           </div>
         </div>
 
-        <!-- Search Input -->
-        <div style="position: relative; margin-bottom: 20px;">
-          <input 
-            class="calc-input" 
-            style="padding-left: 36px;" 
-            type="text" 
-            bind:value={searchQuery} 
-            placeholder="Search by ID or product name..." 
-            aria-label="Search stock"
-          />
-          <span class="material-symbols-outlined" style="position: absolute; left: 10px; top: 10px; font-size: 18px; color: var(--color-on-surface-variant); opacity: 0.6;">search</span>
+        <!-- Search Input & Scanner trigger -->
+        <div style="display: flex; gap: 10px; margin-bottom: 20px; align-items: center;">
+          <div style="position: relative; flex: 1;">
+            <input 
+              class="calc-input" 
+              style="padding-left: 36px; width: 100%; box-sizing: border-box;" 
+              type="text" 
+              bind:value={searchQuery} 
+              placeholder="Search by ID or product name..." 
+              aria-label="Search stock"
+            />
+            <span class="material-symbols-outlined" style="position: absolute; left: 10px; top: 10px; font-size: 18px; color: var(--color-on-surface-variant); opacity: 0.6;">search</span>
+          </div>
+          
+          <button 
+            type="button" 
+            class="btn btn-secondary" 
+            style="display: flex; align-items: center; gap: 6px; padding: 10px 16px; flex-shrink: 0;"
+            onclick={startScanner}
+          >
+            <span class="material-symbols-outlined" style="font-size: 18px;">photo_camera</span>
+            Scan Tag
+          </button>
         </div>
 
         <!-- Inventory Table -->
@@ -1178,6 +1448,74 @@
             </button>
           </div>
         </div>
+      </div>
+    </div>
+  </div>
+{/if}
+
+<!-- Live Webcam Scanner Modal -->
+{#if showScannerModal}
+  <div class="modal-backdrop" style="z-index: 1100;">
+    <button class="modal-backdrop-close" onclick={stopScanner} aria-label="Close scanner overlay"></button>
+    <div class="modal-content glass-card" style="max-width: 500px; padding: 24px; position: relative;" role="dialog" aria-modal="true" aria-labelledby="scanner-modal-title" tabindex="-1">
+      <button class="modal-close-btn" onclick={stopScanner} aria-label="Close Scanner">
+        <span class="material-symbols-outlined">close</span>
+      </button>
+      
+      <div style="display: flex; flex-direction: column; align-items: center; gap: 16px; width: 100%;">
+        <div style="display: flex; align-items: center; gap: 8px; width: 100%; justify-content: flex-start;">
+          <span class="material-symbols-outlined" style="color: var(--color-primary); font-size: 24px;">photo_camera</span>
+          <h3 id="scanner-modal-title" style="margin: 0; font-family: var(--font-headline); font-size: 18px; font-weight: 600; color: var(--color-on-background);">Webcam Barcode & QR Scanner</h3>
+        </div>
+        
+        <p style="margin: 0; font-size: 13px; color: var(--color-on-surface-variant); text-align: left; width: 100%;">
+          Hold the barcode or QR code tag in front of your camera. It will be scanned automatically.
+        </p>
+
+        <!-- Camera selection dropdown -->
+        {#if camerasList.length > 1}
+          <div style="width: 100%; display: flex; flex-direction: column; gap: 6px; align-items: flex-start;">
+            <label for="camera-select" style="font-size: 11px; font-weight: 600; text-transform: uppercase; color: var(--color-on-surface-variant);">Select Camera Source</label>
+            <select 
+              id="camera-select" 
+              class="select-input" 
+              style="width: 100%; box-sizing: border-box;" 
+              bind:value={activeCameraId} 
+              onchange={startCamera}
+            >
+              {#each camerasList as cam}
+                <option value={cam.id}>{cam.label || `Camera ${cam.id}`}</option>
+              {/each}
+            </select>
+          </div>
+        {/if}
+        
+        <!-- Scanner display container -->
+        <div style="width: 100%; aspect-ratio: 1.3333; background: #000; border-radius: var(--radius-md); overflow: hidden; position: relative; border: 2px solid var(--color-outline-variant);">
+          <div id="webcam-reader" style="width: 100%; height: 100%; object-fit: cover;"></div>
+          
+          <!-- Crosshair / Scanning reticle -->
+          {#if !scannerError}
+            <div style="position: absolute; top: 0; left: 0; right: 0; bottom: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; pointer-events: none; z-index: 5;">
+              <div style="width: 70%; height: 40%; border: 2px solid var(--color-primary); border-radius: var(--radius-sm); position: relative; box-shadow: 0 0 0 9999px rgba(0,0,0,0.5);">
+                <!-- Laser scan animation -->
+                <div style="position: absolute; left: 0; right: 0; height: 2px; background-color: var(--color-primary); top: 0; animation: scanLine 2s linear infinite; box-shadow: 0 0 8px var(--color-primary);"></div>
+              </div>
+              <span style="font-size: 11px; color: white; background: rgba(0,0,0,0.6); padding: 4px 8px; border-radius: var(--radius-sm); margin-top: 16px; font-family: monospace; letter-spacing: 0.5px;">ALIGN TAG HERE</span>
+            </div>
+          {/if}
+        </div>
+
+        {#if scannerError}
+          <div class="alert-box alert-error" style="width: 100%; box-sizing: border-box; margin: 0;">
+            <span class="material-symbols-outlined" style="font-size: 16px;">error</span>
+            <span>{scannerError}</span>
+          </div>
+        {/if}
+
+        <button class="btn btn-secondary" style="width: 100%;" onclick={stopScanner}>
+          Cancel Scan
+        </button>
       </div>
     </div>
   </div>

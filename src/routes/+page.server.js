@@ -1,3 +1,5 @@
+import fs from 'fs';
+import path from 'path';
 import { getDb } from '$lib/db';
 
 /** @type {import('./$types').PageServerLoad} */
@@ -21,8 +23,21 @@ export async function load() {
       products
     };
   } catch (error) {
-    console.error('Failed to load products from MongoDB:', error);
-    // If the database fails to connect or is empty (e.g. initial run), return empty list fallback
+    console.error('Failed to load products from MongoDB, falling back to local products.json:', error);
+    
+    try {
+      const jsonPath = path.resolve('src/lib/products.json');
+      if (fs.existsSync(jsonPath)) {
+        const raw = fs.readFileSync(jsonPath, 'utf8');
+        const products = JSON.parse(raw);
+        return {
+          products
+        };
+      }
+    } catch (jsonError) {
+      console.error('Failed to read local products.json fallback:', jsonError);
+    }
+
     return {
       products: []
     };
