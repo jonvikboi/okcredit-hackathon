@@ -5,7 +5,30 @@ import gzip
 import base64
 import csv
 import time
+import os
 from datetime import datetime
+from pymongo import MongoClient
+
+# Load environment variables from .env file
+def load_env():
+    if os.path.exists(".env"):
+        with open(".env", "r") as f:
+            for line in f:
+                if line.strip() and not line.startswith("#"):
+                    parts = line.strip().split("=", 1)
+                    if len(parts) == 2:
+                        os.environ[parts[0].strip()] = parts[1].strip().strip('"').strip("'")
+
+load_env()
+mongo_uri = os.environ.get("MONGODB_URI")
+db = None
+if mongo_uri:
+    try:
+        mongo_client = MongoClient(mongo_uri)
+        db = mongo_client.okcredit_inventory
+        print("Connected to MongoDB for Live Rates update!")
+    except Exception as e:
+        print("Failed to connect to MongoDB:", e)
 
 URL = "ws://ambicaaspot.com:1001/bullion?user=ambicaa&auth=1&type=web"
 CSV_FILE = "ambicaa_rates.csv"
@@ -35,6 +58,78 @@ def save_to_csv(products):
                 item.get("High", ""),
                 item.get("Low", "")
             ])
+
+
+def save_to_mongodb(products):
+    if not db:
+        return
+    try:
+        # Default rates fallback
+        gold24k = 15485
+        silver = 266.16
+        rates_updated = False
+        
+        for item in products:
+            name = item.get("Name", item.get("symbol", ""))
+            try:
+                ask = float(item.get("Ask", 0))
+            except ValueError:
+                continue
+                
+            if name in ['GOLD26JUNFUT', '117574919', 'GOLD26AUGFUT', '119445255']:
+                gold24k = round(ask / 10)
+                rates_updated = True
+            elif name in ['SILVER26JULFUT', '118822407', 'SILVER26SEPFUT', '120761607']:
+                silver = round((ask / 1000) * 100) / 100
+                rates_updated = True
+                
+        if not rates_updated:
+            # Check if rates document already exists to preserve them
+            existing = db.rates.find_one({"id": "latest_rates"})
+            if existing:
+                gold24k = existing.get("gold24k", gold24k)
+                silver = existing.get("silver", silver)
+                
+        # Parse logs of recent ticks
+        logs = []
+        for item in products:
+            symbol = item.get("Name", item.get("symbol", ""))
+            resolved_name = symbol
+            if symbol == '117574919': resolved_name = 'GOLD26JUNFUT (24K)'
+            elif symbol == '119445255': resolved_name = 'GOLD26AUGFUT (24K)'
+            elif symbol == '118822407': resolved_name = 'SILVER26JULFUT'
+            elif symbol == '120761607': resolved_name = 'SILVER26SEPFUT'
+            
+            try:
+                bid = float(item.get("Bid", 0)) if item.get("Bid") else 0.0
+                ask = float(item.get("Ask", 0)) if item.get("Ask") else 0.0
+                ltp = float(item.get("LTP", 0)) if item.get("LTP") else 0.0
+            except ValueError:
+                bid, ask, ltp = 0.0, 0.0, 0.0
+                
+            logs.append({
+                "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                "symbol": resolved_name,
+                "bid": bid,
+                "ask": ask,
+                "ltp": ltp
+            })
+            
+        # Push to MongoDB
+        db.rates.update_one(
+            {"id": "latest_rates"},
+            {"$set": {
+                "gold24k": gold24k,
+                "gold22k": round(gold24k * (22 / 24)),
+                "gold18k": round(gold24k * (18 / 24)),
+                "silver": silver,
+                "timestamp": datetime.now().isoformat(),
+                "logs": logs[:15] # keep last 15 ticks
+            }},
+            upsert=True
+        )
+    except Exception as e:
+        print("MongoDB Rates Update Error:", e)
 
 
 def print_products(products):
@@ -113,6 +208,7 @@ def process_message(msg):
                 if products:
                     print_products(products)
                     save_to_csv(products)
+                    save_to_mongodb(products)
 
         except Exception as e:
             print("Processing Error:", e)

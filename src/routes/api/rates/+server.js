@@ -1,5 +1,6 @@
 import fs from 'fs';
 import path from 'path';
+import { getDb } from '$lib/db';
 
 // Default fallback rates based on recent logs in June 2026
 const DEFAULT_RATES = {
@@ -14,6 +15,29 @@ const DEFAULT_RATES = {
 /** @type {import('./$types').RequestHandler} */
 export async function GET() {
   try {
+    // 1. Try to query the latest rates from MongoDB (for Vercel serverless compatibility)
+    try {
+      const db = await getDb();
+      const ratesCollection = db.collection('rates');
+      const latestRates = await ratesCollection.findOne({ id: 'latest_rates' });
+      
+      if (latestRates) {
+        const { _id, id, ...ratesData } = latestRates;
+        return new Response(JSON.stringify({
+          success: true,
+          source: 'mongodb',
+          ...ratesData
+        }), {
+          headers: {
+            'Content-Type': 'application/json',
+            'Cache-Control': 'no-cache'
+          }
+        });
+      }
+    } catch (dbError) {
+      console.warn('MongoDB rates query failed, falling back to local files:', dbError.message);
+    }
+
     const csvPath = path.resolve('ambicaa_rates.csv');
     
     if (!fs.existsSync(csvPath)) {
