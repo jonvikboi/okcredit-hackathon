@@ -506,9 +506,17 @@
   }
 
   // Trigger a PNG file download for a label image
-  function downloadLabel(dataUri, itemId) {
+  async function downloadLabel(dataUri, itemId) {
+    let finalUri = dataUri;
+    try {
+      const barcode = generateCode39SVG(itemId);
+      finalUri = await generateCompositeLabel(itemId, barcode.dataUri);
+    } catch (err) {
+      console.warn("Failed to dynamically generate clean label, falling back to original image:", err);
+    }
+
     const a = document.createElement('a');
-    a.href = dataUri;
+    a.href = finalUri;
     a.download = `${itemId}_label.png`;
     document.body.appendChild(a);
     a.click();
@@ -1156,13 +1164,9 @@
                 <tr>
                   <td><span class="id-badge">{product.id}</span></td>
                   <td>
-                    {#if product.image.startsWith('data:image')}
-                      <div style="width: 70px; height: 35px; background: white; padding: 2px; border-radius: var(--radius-sm); border: 1px solid var(--color-outline-variant); overflow: hidden; display: flex; align-items: center; justify-content: center;" title="Jewelry Label">
-                        <img src={product.image} alt="Label" style="max-width: 100%; max-height: 100%; object-fit: contain; filter: none;" />
-                      </div>
-                    {:else}
-                      <img class="thumbnail" src={product.image} alt={product.name} />
-                    {/if}
+                    <div style="width: 100px; height: 35px; background: white; padding: 2px; border-radius: var(--radius-sm); border: 1px solid var(--color-outline-variant); overflow: hidden; display: flex; align-items: center; justify-content: center;" title="Barcode Label">
+                      {@html generateCode39SVG(product.id).svgContent}
+                    </div>
                   </td>
                   <td>
                     <div style="font-weight: 600; color: var(--color-on-background);">{product.name}</div>
@@ -1402,14 +1406,13 @@
       </button>
       
       <div class="modal-body">
-        <div class="modal-product-img-container" style="background-color: var(--color-surface-lowest); padding: 20px; border-radius: var(--radius-md); display: flex; justify-content: center; align-items: center; width: 100%;">
-          {#if selectedProduct.image.startsWith('data:image')}
-            <div style="background: white; padding: 12px; border-radius: var(--radius-sm); display: flex; align-items: center; justify-content: center; max-height: 250px; max-width: 300px; overflow: hidden;">
-              <img src={selectedProduct.image} alt="Jewelry Tag Label" style="max-width: 100%; max-height: 100%; object-fit: contain;" />
+        <div class="modal-product-img-container" style="background-color: var(--color-surface-lowest); padding: 20px; border-radius: var(--radius-md); display: flex; flex-direction: column; gap: 8px; justify-content: center; align-items: center; width: 100%;">
+          <div style="background: white; padding: 12px; border-radius: var(--radius-sm); display: flex; flex-direction: column; align-items: center; justify-content: center; width: 220px; border: 1px solid var(--color-outline-variant);">
+            <div style="font-size: 8px; font-weight: 700; text-transform: uppercase; margin-bottom: 6px; color: black; letter-spacing: 0.5px;">Sunrise Fine Jewells</div>
+            <div style="width: 100%; height: 40px; display: flex; align-items: center; justify-content: center; overflow: hidden; margin-bottom: 4px;">
+              {@html generateCode39SVG(selectedProduct.id).svgContent}
             </div>
-          {:else}
-            <img class="modal-product-img" src={selectedProduct.image} alt={selectedProduct.name} style="max-height: 150px; object-fit: cover;" />
-          {/if}
+          </div>
         </div>
         
         <div class="modal-details-container">
