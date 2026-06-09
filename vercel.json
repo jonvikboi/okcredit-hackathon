@@ -1,0 +1,13 @@
+{
+  "crons": [
+    {
+      "path": "/api/cron/fetch-rates",
+      "schedule": "* * * * *"
+    }
+  ],
+  "functions": {
+    "src/routes/api/cron/fetch-rates/+server.js": {
+      "maxDuration": 30
+    }
+  }
+}

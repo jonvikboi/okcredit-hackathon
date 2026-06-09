@@ -25,7 +25,7 @@
   let calcMakingCharge = $state(12); // %
   let calcFixedValue = $state(0);
 
-  // Recent CSV Audit logs
+  // Live Feed Audit logs
   let auditLogs = $state([]);
 
   // Detailed Modal state
@@ -185,7 +185,7 @@
     }
   }
 
-  // Fetch rates and recent logs from SvelteKit API endpoint (falls back to local CSV)
+  // Fetch rates and recent logs from SvelteKit API endpoint (falls back to local database/feed)
   async function fetchRatesFromAPI() {
     try {
       const res = await fetch('/api/rates');
@@ -297,6 +297,7 @@
   let isDescriptionDirty = $state(false);
   let formError = $state('');
   let formSuccess = $state('');
+  let lastGeneratedLabel = $state(null); // { dataUri, id } — shown after successful add
 
   // Live QR Code states and generator effect
   let qrCodeSvg = $state('');
@@ -513,6 +514,7 @@
       if (result.success) {
         products = [...products, result.product];
         formSuccess = `Product ${result.product.id} successfully added to inventory!`;
+        lastGeneratedLabel = { dataUri: finalLabelImage, id: result.product.id };
         
         // Reset inputs
         entryWeight = '';
@@ -529,6 +531,16 @@
       console.error(err);
       formError = 'Network error: Failed to save product.';
     }
+  }
+
+  // Trigger a PNG file download for a label image
+  function downloadLabel(dataUri, itemId) {
+    const a = document.createElement('a');
+    a.href = dataUri;
+    a.download = `${itemId}_label.png`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
   }
 
   // Modal open helper
@@ -1051,7 +1063,7 @@
               
               <!-- Side A: Barcode Sticker -->
               <div style="background-color: white; color: black; padding: 12px; border-radius: var(--radius-sm); border: 1px solid var(--color-outline); width: 200px; display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 80px;">
-                <div style="font-size: 8px; font-weight: 700; text-transform: uppercase; margin-bottom: 4px; letter-spacing: 0.5px; color: black;">Ambicaa Jewellers</div>
+                <div style="font-size: 8px; font-weight: 700; text-transform: uppercase; margin-bottom: 4px; letter-spacing: 0.5px; color: black;">Sunrise Fine Jewells</div>
                 <div class="barcode-svg-container" style="background-color: transparent; padding: 0; width: 100%; height: 35px; display: flex; align-items: center; justify-content: center; overflow: hidden;">
                   {@html barcodeData.svgContent}
                 </div>
@@ -1079,6 +1091,33 @@
             <span class="material-symbols-outlined" style="font-size: 16px;">add_box</span>
             Add Item to Stock
           </button>
+
+          {#if formError}
+            <div class="alert-box alert-error" style="margin-top: 12px;">
+              <span class="material-symbols-outlined" style="font-size: 16px;">error</span>
+              {formError}
+            </div>
+          {/if}
+
+          {#if formSuccess && lastGeneratedLabel}
+            <div style="margin-top: 16px; background: rgba(76,175,80,0.08); border: 1px solid rgba(76,175,80,0.3); border-radius: var(--radius-sm); padding: 16px; display: flex; flex-direction: column; align-items: center; gap: 12px;">
+              <div style="display: flex; align-items: center; gap: 8px; color: var(--color-success); font-size: 13px; font-weight: 600;">
+                <span class="material-symbols-outlined" style="font-size: 18px;">check_circle</span>
+                {formSuccess}
+              </div>
+              <img src={lastGeneratedLabel.dataUri} alt="Label preview" style="max-width: 240px; border: 1px solid var(--color-outline-variant); border-radius: var(--radius-sm); background: white;" />
+              <button
+                type="button"
+                class="btn btn-primary"
+                style="display: flex; align-items: center; gap: 8px; padding: 10px 24px;"
+                onclick={() => downloadLabel(lastGeneratedLabel.dataUri, lastGeneratedLabel.id)}
+              >
+                <span class="material-symbols-outlined" style="font-size: 16px;">download</span>
+                Download Label PNG
+              </button>
+              <p style="font-size: 10px; color: var(--color-on-surface-variant); margin: 0;">Print & stick this label on the jewellery item</p>
+            </div>
+          {/if}
         </form>
       </div>
 
@@ -1175,9 +1214,22 @@
                   <td>{formatCurrency(product.gst)}</td>
                   <td><span class="price-val">{formatCurrency(product.totalPrice)}</span></td>
                   <td>
-                    <button class="btn btn-secondary btn-small" style="padding: 6px 12px; font-size: 10px;" onclick={() => openBreakdown(product)}>
-                      Full Audit
-                    </button>
+                    <div style="display: flex; gap: 6px; flex-wrap: wrap;">
+                      <button class="btn btn-secondary btn-small" style="padding: 6px 12px; font-size: 10px;" onclick={() => openBreakdown(product)}>
+                        Full Audit
+                      </button>
+                      {#if product.image && product.image.startsWith('data:image')}
+                        <button
+                          class="btn btn-secondary btn-small"
+                          style="padding: 6px 10px; font-size: 10px; display: flex; align-items: center; gap: 4px; border-color: rgba(242,202,80,0.3); color: var(--color-primary);"
+                          title="Download label for printing"
+                          onclick={() => downloadLabel(product.image, product.id)}
+                        >
+                          <span class="material-symbols-outlined" style="font-size: 13px;">download</span>
+                          Label
+                        </button>
+                      {/if}
+                    </div>
                   </td>
                 </tr>
               {:else}
@@ -1348,14 +1400,14 @@
         </div>
       </div>
       
-      <!-- CSV Bullion Logs Console Auditor -->
+      <!-- Live Bullion Logs Console Auditor -->
       <div class="panel">
         <h2 class="panel-title" style="margin-bottom: 12px; display: flex; align-items: center; justify-content: space-between;">
           <span style="display: flex; align-items: center; gap: 6px;">
             <span class="material-symbols-outlined" style="color: var(--color-primary); font-size: 18px;">terminal</span>
-            Recent CSV Ticks
+            Recent Live Feed Ticks
           </span>
-          <span style="font-size: 9px; font-family: monospace; color: var(--color-on-surface-variant); font-weight: normal;">ambicaa_rates.csv</span>
+          <span style="font-size: 9px; font-family: monospace; color: var(--color-on-surface-variant); font-weight: normal;">Live Feed Tracker</span>
         </h2>
         
         <div class="console-container">
@@ -1521,8 +1573,8 @@
   </div>
 {/if}
 
-<footer style="margin-top: 60px; background-color: var(--color-surface-lowest); border-top: 1px solid rgba(242, 202, 80, 0.15); padding: 24px 0; font-size: 12px; color: var(--color-on-surface-variant); text-align: center;">
+<footer style="margin-top: 60px; background-color: var(--color-surface-low); border-top: 2px solid var(--color-outline); padding: 20px 0; font-size: 11px; font-weight: 500; letter-spacing: 0.08em; text-transform: uppercase; color: var(--color-on-surface-variant); text-align: center;">
   <div class="container">
-    Ambicaa Jewellers Admin Portal © 2026. Connected to Bullion Websocket Feed & CSV Log Sync.
+    Sunrise Fine Jewells &mdash; Internal Management Portal &copy; 2026
   </div>
 </footer>
