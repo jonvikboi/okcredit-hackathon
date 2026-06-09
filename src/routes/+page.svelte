@@ -1,6 +1,5 @@
 <script>
   import { onMount } from 'svelte';
-  import QRCode from 'qrcode';
 
   // State variables (Svelte 5 runes) received from +page.server.js load
   let { data } = $props();
@@ -299,26 +298,6 @@
   let formSuccess = $state('');
   let lastGeneratedLabel = $state(null); // { dataUri, id } — shown after successful add
 
-  // Live QR Code states and generator effect
-  let qrCodeSvg = $state('');
-  let qrCodeDataUri = $state('');
-
-  $effect(() => {
-    if (generatedBarcodeID) {
-      QRCode.toString(generatedBarcodeID, { type: 'svg', margin: 1, width: 120 })
-        .then(svg => {
-          qrCodeSvg = svg;
-        })
-        .catch(err => console.error(err));
-        
-      QRCode.toDataURL(generatedBarcodeID, { margin: 1 })
-        .then(url => {
-          qrCodeDataUri = url;
-        })
-        .catch(err => console.error(err));
-    }
-  });
-
   // Code 39 Encoding Table
   const code39Map = {
     '0': '000110100', '1': '100100001', '2': '001100001', '3': '101100000',
@@ -412,43 +391,37 @@
   );
 
   // Client-side composite label image generator (HTML5 Canvas)
-  // Replicates the layout of the teammate's python script (600x500 PNG)
-  function generateCompositeLabel(itemId, qrUri, barcodeUri) {
+  function generateCompositeLabel(itemId, barcodeUri) {
     return new Promise((resolve, reject) => {
       try {
         const canvas = document.createElement('canvas');
         canvas.width = 600;
-        canvas.height = 500;
+        canvas.height = 300;
         const ctx = canvas.getContext('2d');
 
         // Fill background with white
         ctx.fillStyle = 'white';
-        ctx.fillRect(0, 0, 600, 500);
+        ctx.fillRect(0, 0, 600, 300);
 
         let loaded = 0;
         const checkReady = () => {
           loaded++;
-          if (loaded === 2) {
-            // Draw text details (font size 24px Arial matches python script)
+          if (loaded === 1) {
+            // Draw text details
             ctx.fillStyle = 'black';
+            ctx.textAlign = 'center';
+            ctx.font = 'bold 28px Arial, sans-serif';
+            ctx.fillText("SUNRISE FINE JEWELLS", 300, 55);
+            
             ctx.font = '24px Arial, sans-serif';
-            ctx.fillText(itemId, 220, 254); // matches draw.text((220, 240)) with baseline offset
-            ctx.fillText(itemId, 220, 424); // matches draw.text((220, 410)) with baseline offset
+            ctx.fillText("ID: " + itemId, 300, 265);
             resolve(canvas.toDataURL('image/png'));
           }
         };
 
-        const qrImg = new Image();
-        qrImg.onload = () => {
-          ctx.drawImage(qrImg, 190, 20, 220, 220); // matches python paste(qr_img, (190, 20)) after resize to 220x220
-          checkReady();
-        };
-        qrImg.onerror = reject;
-        qrImg.src = qrUri;
-
         const barImg = new Image();
         barImg.onload = () => {
-          ctx.drawImage(barImg, 50, 270, 500, 120); // matches python paste(barcode_img, (50, 270)) after resize to 500x120
+          ctx.drawImage(barImg, 50, 85, 500, 140);
           checkReady();
         };
         barImg.onerror = reject;
@@ -485,7 +458,7 @@
 
     let finalLabelImage = barcodeData.dataUri;
     try {
-      finalLabelImage = await generateCompositeLabel(generatedBarcodeID, qrCodeDataUri, barcodeData.dataUri);
+      finalLabelImage = await generateCompositeLabel(generatedBarcodeID, barcodeData.dataUri);
     } catch (canvasErr) {
       console.error('Failed to generate composite label image via canvas:', canvasErr);
     }
@@ -499,8 +472,7 @@
       fixedValue: fixedValueNum,
       category: entryCategory,
       description: displayDesc,
-      image: finalLabelImage,
-      qrImage: qrCodeDataUri
+      image: finalLabelImage
     };
     
     try {
@@ -1058,30 +1030,22 @@
           </div>
           
           <div class="barcode-preview-card" style="display: flex; flex-direction: column; align-items: center; gap: 12px; width: 100%;">
-            <span style="font-size: 10px; text-transform: uppercase; color: var(--color-on-surface-variant); letter-spacing: 0.1em; margin-bottom: 4px;">Real-Time Dual Jewelry Tag Sticker Preview</span>
-            <div style="display: flex; gap: 20px; width: 100%; justify-content: center; flex-wrap: wrap;">
+            <span style="font-size: 10px; text-transform: uppercase; color: var(--color-on-surface-variant); letter-spacing: 0.1em; margin-bottom: 4px;">Real-Time Jewelry Barcode Tag Sticker Preview</span>
+            <div style="display: flex; gap: 20px; width: 100%; justify-content: center;">
               
-              <!-- Side A: Barcode Sticker -->
-              <div style="background-color: white; color: black; padding: 12px; border-radius: var(--radius-sm); border: 1px solid var(--color-outline); width: 200px; display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 80px;">
-                <div style="font-size: 8px; font-weight: 700; text-transform: uppercase; margin-bottom: 4px; letter-spacing: 0.5px; color: black;">Sunrise Fine Jewells</div>
-                <div class="barcode-svg-container" style="background-color: transparent; padding: 0; width: 100%; height: 35px; display: flex; align-items: center; justify-content: center; overflow: hidden;">
+              <!-- Unified Barcode Sticker -->
+              <div style="background-color: white; color: black; padding: 16px; border-radius: var(--radius-sm); border: 1px solid var(--color-outline); width: 280px; display: flex; flex-direction: column; align-items: center; justify-content: center; box-shadow: var(--shadow-sm);">
+                <div style="font-size: 9px; font-weight: 700; text-transform: uppercase; margin-bottom: 6px; letter-spacing: 0.8px; color: black;">Sunrise Fine Jewells</div>
+                
+                <div class="barcode-svg-container" style="background-color: transparent; padding: 0; width: 100%; height: 45px; display: flex; align-items: center; justify-content: center; overflow: hidden; margin-bottom: 6px;">
                   {@html barcodeData.svgContent}
                 </div>
-              </div>
-              
-              <!-- Side B: QR Code & Weights Tag -->
-              <div style="background-color: white; color: black; padding: 12px; border-radius: var(--radius-sm); border: 1px solid var(--color-outline); width: 200px; display: flex; align-items: center; gap: 10px; justify-content: space-between; min-height: 80px;">
-                <div style="display: flex; flex-direction: column; align-items: flex-start; justify-content: center; font-family: monospace; font-size: 9px; line-height: 1.4; color: black; text-align: left;">
-                  <div style="font-weight: 700; font-size: 9px; margin-bottom: 2px; color: black; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 110px;">{displayName}</div>
-                  <div>ID: {generatedBarcodeID}</div>
+                
+                <div style="display: flex; width: 100%; justify-content: space-between; font-family: monospace; font-size: 8px; color: black; border-top: 1px dashed #ccc; padding-top: 6px; margin-top: 2px;">
                   <div>WT: {entryWeight || '0.00'} g</div>
                   <div>KT: {entryPurity} Gold</div>
+                  <div>ID: {generatedBarcodeID}</div>
                 </div>
-                {#if qrCodeSvg}
-                  <div style="width: 50px; height: 50px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; background: white; padding: 2px;">
-                    {@html qrCodeSvg}
-                  </div>
-                {/if}
               </div>
               
             </div>
@@ -1517,11 +1481,11 @@
       <div style="display: flex; flex-direction: column; align-items: center; gap: 16px; width: 100%;">
         <div style="display: flex; align-items: center; gap: 8px; width: 100%; justify-content: flex-start;">
           <span class="material-symbols-outlined" style="color: var(--color-primary); font-size: 24px;">photo_camera</span>
-          <h3 id="scanner-modal-title" style="margin: 0; font-family: var(--font-headline); font-size: 18px; font-weight: 600; color: var(--color-on-background);">Webcam Barcode & QR Scanner</h3>
+          <h3 id="scanner-modal-title" style="margin: 0; font-family: var(--font-headline); font-size: 18px; font-weight: 600; color: var(--color-on-background);">Webcam Barcode Scanner</h3>
         </div>
         
         <p style="margin: 0; font-size: 13px; color: var(--color-on-surface-variant); text-align: left; width: 100%;">
-          Hold the barcode or QR code tag in front of your camera. It will be scanned automatically.
+          Hold the barcode tag in front of your camera. It will be scanned automatically.
         </p>
 
         <!-- Camera selection dropdown -->
