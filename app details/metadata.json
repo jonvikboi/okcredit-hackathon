@@ -1,0 +1,6 @@
+{
+  "name": "Sunrise Jewells",
+  "description": "Internal jewellery store management, valuation, and checkout dashboard.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
