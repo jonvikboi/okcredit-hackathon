@@ -28,11 +28,6 @@
   let searchQuery = $state("");
   let activeCategory = $state("All");
 
-  // Walk-in Calculator state
-  let calcWeight = $state(10);
-  let calcPurity = $state("22K");
-  let calcMakingCharge = $state(12); // %
-  let calcFixedValue = $state(0);
 
   // Live Feed Audit logs
   let auditLogs = $state([]);
@@ -123,19 +118,6 @@
     computedProducts.reduce((acc, p) => acc + p.totalPrice, 0),
   );
 
-  // derived quick quote calculator calculation
-  let calcResult = $derived.by(() => {
-    let rate = activeGold24k;
-    if (calcPurity === "22K") rate = activeGold22k;
-    else if (calcPurity === "18K") rate = activeGold18k;
-    else if (calcPurity === "Silver") rate = activeSilver;
-
-    const metalValue = calcWeight * rate;
-    const makingCharges = metalValue * (calcMakingCharge / 100);
-    const subtotal = metalValue + makingCharges + calcFixedValue;
-    const gst = subtotal * 0.03;
-    return Math.round(subtotal + gst);
-  });
 
   // Derived cart calculations (Svelte 5 runes)
   let cartTotalWeight = $derived(
@@ -1831,77 +1813,6 @@
         </div>
       </div>
 
-      <!-- Walk-in Calculator Tool -->
-      <div class="panel">
-        <h2
-          class="panel-title"
-          style="margin-bottom: 16px; border-bottom: 1px solid rgba(153, 144, 124, 0.15); padding-bottom: 8px; display: flex; align-items: center; gap: 8px;"
-        >
-          <span
-            class="material-symbols-outlined"
-            style="color: var(--color-primary);">calculate</span
-          >
-          Walk-in Calculator
-        </h2>
-
-        <div class="calc-form">
-          <div class="calc-row">
-            <label for="calc-weight-input">Metal Weight (grams)</label>
-            <input
-              id="calc-weight-input"
-              class="calc-input"
-              type="number"
-              bind:value={calcWeight}
-              min="0.1"
-              step="0.01"
-            />
-          </div>
-
-          <div class="calc-row">
-            <label for="calc-purity-select">Purity (Carats)</label>
-            <select
-              id="calc-purity-select"
-              class="select-input"
-              bind:value={calcPurity}
-            >
-              <option value="24K">24K Gold (99.9%)</option>
-              <option value="22K">22K Gold (91.6%)</option>
-              <option value="18K">18K Gold (75.0%)</option>
-              <option value="Silver">Silver (99.9%)</option>
-            </select>
-          </div>
-
-          <div class="calc-row">
-            <label for="calc-making-input">Making Charges (%)</label>
-            <input
-              id="calc-making-input"
-              class="calc-input"
-              type="number"
-              bind:value={calcMakingCharge}
-              min="0"
-              max="50"
-            />
-          </div>
-
-          <div class="calc-row">
-            <label for="calc-fixed-input">Gem/Accents Value (₹)</label>
-            <input
-              id="calc-fixed-input"
-              class="calc-input"
-              type="number"
-              bind:value={calcFixedValue}
-              min="0"
-            />
-          </div>
-
-          <div class="calc-result-box">
-            <span class="calc-result-label"
-              >Dynamic Calculated Quote (with 3% GST)</span
-            >
-            <div class="calc-result-value">{formatCurrency(calcResult)}</div>
-          </div>
-        </div>
-      </div>
 
       <!-- Live Bullion Logs Console Auditor -->
       <div class="panel">
