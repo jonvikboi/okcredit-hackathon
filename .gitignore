@@ -26,5 +26,3 @@ vite.config.ts.timestamp-*
 ambicaa_rates.csv
 temp_barcode*
 *_label.png
-
-.vercel
