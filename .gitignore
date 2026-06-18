@@ -28,3 +28,14 @@ temp_barcode*
 *_label.png
 
 .vercel
+
+# Zips & Archives
+app details.zip
+*.zip
+*.rar
+*.tar.gz
+
+# Logs & Dumps
+dump.txt
+out.txt
+out_utf8.txt

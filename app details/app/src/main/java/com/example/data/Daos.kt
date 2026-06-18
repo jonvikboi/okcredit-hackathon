@@ -29,6 +29,9 @@ interface ProductDao {
     
     @Query("SELECT COUNT(*) FROM products WHERE category = :category AND createdAt > :todayStart")
     suspend fun getCountForCategoryToday(category: String, todayStart: Long): Int
+
+    @Query("SELECT * FROM products WHERE isSynced = 0")
+    suspend fun getUnsyncedProducts(): List<Product>
 }
 
 @Dao
@@ -50,6 +53,12 @@ interface SaleDao {
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertSale(sale: Sale)
+
+    @Query("SELECT * FROM sales WHERE isSynced = 0")
+    suspend fun getUnsyncedSales(): List<Sale>
+
+    @Update
+    suspend fun updateSale(sale: Sale)
 }
 
 @Dao
