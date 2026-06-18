@@ -28,7 +28,55 @@ if (!global._mongoClientPromise) {
   clientPromise = global._mongoClientPromise;
 }
 
+async function seedUsers(db) {
+  try {
+    const usersCollection = db.collection('users');
+    console.log('Ensuring default admin and user credentials are up to date...');
+
+    // Upsert Admin
+    await usersCollection.updateOne(
+      { username: 'admin' },
+      {
+        $set: {
+          password: 'sunrise@213',
+          role: 'admin',
+          updatedAt: new Date()
+        },
+        $setOnInsert: { createdAt: new Date() }
+      },
+      { upsert: true }
+    );
+
+    // Upsert User
+    await usersCollection.updateOne(
+      { username: 'user' },
+      {
+        $set: {
+          password: 'user123',
+          role: 'user',
+          updatedAt: new Date()
+        },
+        $setOnInsert: { createdAt: new Date() }
+      },
+      { upsert: true }
+    );
+
+    console.log('Credentials update/seeding completed successfully.');
+  } catch (error) {
+    console.error('Error during users seeding:', error);
+  }
+}
+
 export async function getDb() {
   const connection = await clientPromise;
-  return connection.db('okcredit_inventory');
+  const db = connection.db('okcredit_inventory');
+
+  if (!global._usersSeeded) {
+    global._usersSeeded = (async () => {
+      await seedUsers(db);
+      return true;
+    })();
+  }
+
+  return db;
 }

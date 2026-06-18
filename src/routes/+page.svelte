@@ -936,10 +936,15 @@
   <div class="dashboard-header">
     <div>
       <h1 class="dashboard-logo">Store Valuations & Bullion Dashboard</h1>
-      <p class="dashboard-subtitle">
-        Monitor live market gold rates, override calculations, and manage
-        inventory valuations.
-      </p>
+      <div style="display: flex; align-items: center; gap: 10px; margin-top: 6px; flex-wrap: wrap;">
+        <span class="dashboard-subtitle" style="margin-top: 0;">
+          Monitor live market gold rates, override calculations, and manage inventory valuations.
+        </span>
+        <span style="font-size: 10px; font-weight: 700; text-transform: uppercase; background: var(--color-primary-container); color: var(--color-primary); padding: 3px 10px; border-radius: var(--radius-full); display: inline-flex; align-items: center; gap: 4px; border: 1px solid rgba(154, 123, 62, 0.25);">
+          <span class="material-symbols-outlined" style="font-size: 12px; vertical-align: middle;">person</span>
+          {data.username || 'unknown'} ({data.role || 'user'})
+        </span>
+      </div>
     </div>
 
     <div style="display: flex; gap: 12px; align-items: center;">
@@ -969,6 +974,12 @@
           >refresh</span
         >
       </button>
+
+      <form action="/login?/logout" method="POST" style="margin: 0; display: inline-flex;">
+        <button type="submit" class="btn btn-secondary btn-small" style="color: var(--color-error); border-color: var(--color-outline); display: flex; align-items: center; gap: 4px;">
+          Logout <span class="material-symbols-outlined" style="font-size: 12px;">logout</span>
+        </button>
+      </form>
     </div>
   </div>
 
@@ -988,242 +999,252 @@
           Merchant Stock Entry
         </h2>
 
-        {#if formError}
-          <div class="alert-box alert-error">
-            <span class="material-symbols-outlined" style="font-size: 18px;"
-              >error</span
-            >
-            <span>{formError}</span>
+        {#if data.role !== 'admin'}
+          <div class="alert-box alert-error" style="background: rgba(185, 28, 28, 0.05); border-color: rgba(185, 28, 28, 0.15); display: flex; flex-direction: column; align-items: center; text-align: center; padding: 32px 24px; gap: 12px; margin-top: 8px;">
+            <span class="material-symbols-outlined" style="font-size: 44px; color: var(--color-error);">lock</span>
+            <div style="font-weight: 600; color: var(--color-on-surface); font-size: 15px;">Access Restricted</div>
+            <p style="font-size: 12px; color: var(--color-on-surface-variant); margin: 0; line-height: 1.6; max-width: 300px;">
+              You are signed in as a standard user. Stock additions and modifications are restricted to store administrators.
+            </p>
           </div>
-        {/if}
-
-        {#if formSuccess}
-          <div class="alert-box alert-success">
-            <span class="material-symbols-outlined" style="font-size: 18px;"
-              >check_circle</span
-            >
-            <span>{formSuccess}</span>
-          </div>
-        {/if}
-
-        <form onsubmit={addStockItem} class="calc-form">
-          <div class="entry-form-grid">
-            <div class="calc-row">
-              <label for="entry-category-select">Product Category</label>
-              <select
-                id="entry-category-select"
-                class="select-input"
-                bind:value={entryCategory}
-              >
-                <option value="Ring">Ring</option>
-                <option value="Necklace">Necklace</option>
-                <option value="Bracelet">Bracelet</option>
-                <option value="Earrings">Earrings</option>
-                <option value="Watch">Watch</option>
-              </select>
-            </div>
-
-            <div class="calc-row">
-              <label for="entry-purity-select">Quality / Purity</label>
-              <select
-                id="entry-purity-select"
-                class="select-input"
-                bind:value={entryPurity}
-              >
-                <option value="24K">24K Gold (99.9%)</option>
-                <option value="22K">22K Gold (91.6%)</option>
-                <option value="18K">18K Gold (75.0%)</option>
-                <option value="Silver">Silver (99.9%)</option>
-              </select>
-            </div>
-
-            <div class="calc-row">
-              <label for="entry-weight-input">Weight (grams)</label>
-              <input
-                id="entry-weight-input"
-                class="calc-input"
-                type="number"
-                step="0.001"
-                min="0.001"
-                bind:value={entryWeight}
-                placeholder="0.00"
-                required
-              />
-            </div>
-
-            <div class="calc-row">
-              <label for="entry-making-input">Making Charges (%)</label>
-              <input
-                id="entry-making-input"
-                class="calc-input"
-                type="number"
-                step="0.1"
-                min="0"
-                bind:value={entryMakingCharge}
-                placeholder="12.0"
-                required
-              />
-            </div>
-
-            <div class="calc-row">
-              <label for="entry-fixed-input">Gem/Accents Value (₹)</label>
-              <input
-                id="entry-fixed-input"
-                class="calc-input"
-                type="number"
-                min="0"
-                bind:value={entryFixedValue}
-                placeholder="0"
-              />
-            </div>
-
-            <div class="calc-row">
-              <span
-                style="font-size: 11px; font-weight: 600; text-transform: uppercase; color: var(--color-on-surface-variant); letter-spacing: 0.05em; margin-bottom: 6px; display: block;"
-                >Generated Barcode ID</span
-              >
-              <div
-                class="calc-input"
-                style="background-color: var(--color-surface-lowest); border-color: var(--color-outline-variant); font-family: monospace; letter-spacing: 1px; color: var(--color-primary); display: flex; align-items: center;"
-              >
-                {generatedBarcodeID}
-              </div>
-            </div>
-
-            <div class="calc-row form-full-width">
-              <label for="entry-name-input">Product Name</label>
-              <input
-                id="entry-name-input"
-                type="text"
-                class="calc-input"
-                value={isNameDirty ? entryName : autoName}
-                oninput={(e) => {
-                  entryName = e.target.value;
-                  isNameDirty = e.target.value.trim() !== "";
-                }}
-                placeholder="e.g. Celestial Gold Ring"
-              />
-            </div>
-
-            <div class="calc-row form-full-width">
-              <label for="entry-desc-textarea">Description</label>
-              <textarea
-                id="entry-desc-textarea"
-                class="calc-input"
-                style="resize: vertical; min-height: 60px;"
-                value={isDescriptionDirty ? entryDescription : autoDesc}
-                oninput={(e) => {
-                  entryDescription = e.target.value;
-                  isDescriptionDirty = e.target.value.trim() !== "";
-                }}
-                placeholder="Enter item description..."
-              ></textarea>
-            </div>
-          </div>
-
-          <div
-            class="barcode-preview-card"
-            style="display: flex; flex-direction: column; align-items: center; gap: 12px; width: 100%;"
-          >
-            <span
-              style="font-size: 10px; text-transform: uppercase; color: var(--color-on-surface-variant); letter-spacing: 0.1em; margin-bottom: 4px;"
-              >Real-Time Jewelry Barcode Tag Sticker Preview</span
-            >
-            <div
-              style="display: flex; gap: 20px; width: 100%; justify-content: center;"
-            >
-              <!-- Unified Barcode Sticker -->
-              <div
-                style="background-color: white; color: black; padding: 16px; border-radius: var(--radius-sm); border: 1px solid var(--color-outline); width: 280px; display: flex; flex-direction: column; align-items: center; justify-content: center; box-shadow: var(--shadow-sm);"
-              >
-                <div
-                  style="font-size: 9px; font-weight: 700; text-transform: uppercase; margin-bottom: 6px; letter-spacing: 0.8px; color: black;"
-                >
-                  Sunrise Fine Jewells
-                </div>
-
-                <div
-                  class="barcode-svg-container"
-                  style="background-color: transparent; padding: 0; width: 100%; height: 45px; display: flex; align-items: center; justify-content: center; overflow: hidden; margin-bottom: 6px;"
-                >
-                  {@html barcodeData.svgContent}
-                </div>
-
-                <div
-                  style="display: flex; width: 100%; justify-content: space-between; font-family: monospace; font-size: 8px; color: black; border-top: 1px dashed #ccc; padding-top: 6px; margin-top: 2px;"
-                >
-                  <div>WT: {entryWeight || "0.00"} g</div>
-                  <div>
-                    {entryPurity === "Silver"
-                      ? "Silver"
-                      : `KT: ${entryPurity} Gold`}
-                  </div>
-                  <div>ID: {generatedBarcodeID}</div>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <button
-            type="submit"
-            class="btn btn-primary"
-            style="width: 100%; margin-top: 8px; display: flex; align-items: center; justify-content: center; gap: 8px;"
-          >
-            <span class="material-symbols-outlined" style="font-size: 16px;"
-              >add_box</span
-            >
-            Add Item to Stock
-          </button>
-
+        {:else}
           {#if formError}
-            <div class="alert-box alert-error" style="margin-top: 12px;">
-              <span class="material-symbols-outlined" style="font-size: 16px;"
+            <div class="alert-box alert-error">
+              <span class="material-symbols-outlined" style="font-size: 18px;"
                 >error</span
               >
-              {formError}
+              <span>{formError}</span>
             </div>
           {/if}
 
-          {#if formSuccess && lastGeneratedLabel}
-            <div
-              style="margin-top: 16px; background: rgba(76,175,80,0.08); border: 1px solid rgba(76,175,80,0.3); border-radius: var(--radius-sm); padding: 16px; display: flex; flex-direction: column; align-items: center; gap: 12px;"
-            >
-              <div
-                style="display: flex; align-items: center; gap: 8px; color: var(--color-success); font-size: 13px; font-weight: 600;"
+          {#if formSuccess}
+            <div class="alert-box alert-success">
+              <span class="material-symbols-outlined" style="font-size: 18px;"
+                >check_circle</span
               >
-                <span class="material-symbols-outlined" style="font-size: 18px;"
-                  >check_circle</span
-                >
-                {formSuccess}
-              </div>
-              <img
-                src={lastGeneratedLabel.dataUri}
-                alt="Label preview"
-                style="max-width: 240px; border: 1px solid var(--color-outline-variant); border-radius: var(--radius-sm); background: white;"
-              />
-              <button
-                type="button"
-                class="btn btn-primary"
-                style="display: flex; align-items: center; gap: 8px; padding: 10px 24px;"
-                onclick={() =>
-                  downloadLabel(
-                    lastGeneratedLabel.dataUri,
-                    lastGeneratedLabel.id,
-                  )}
-              >
-                <span class="material-symbols-outlined" style="font-size: 16px;"
-                  >download</span
-                >
-                Download Label PNG
-              </button>
-              <p
-                style="font-size: 10px; color: var(--color-on-surface-variant); margin: 0;"
-              >
-                Print & stick this label on the jewellery item
-              </p>
+              <span>{formSuccess}</span>
             </div>
           {/if}
-        </form>
+
+          <form onsubmit={addStockItem} class="calc-form">
+            <div class="entry-form-grid">
+              <div class="calc-row">
+                <label for="entry-category-select">Product Category</label>
+                <select
+                  id="entry-category-select"
+                  class="select-input"
+                  bind:value={entryCategory}
+                >
+                  <option value="Ring">Ring</option>
+                  <option value="Necklace">Necklace</option>
+                  <option value="Bracelet">Bracelet</option>
+                  <option value="Earrings">Earrings</option>
+                  <option value="Watch">Watch</option>
+                </select>
+              </div>
+
+              <div class="calc-row">
+                <label for="entry-purity-select">Quality / Purity</label>
+                <select
+                  id="entry-purity-select"
+                  class="select-input"
+                  bind:value={entryPurity}
+                >
+                  <option value="24K">24K Gold (99.9%)</option>
+                  <option value="22K">22K Gold (91.6%)</option>
+                  <option value="18K">18K Gold (75.0%)</option>
+                  <option value="Silver">Silver (99.9%)</option>
+                </select>
+              </div>
+
+              <div class="calc-row">
+                <label for="entry-weight-input">Weight (grams)</label>
+                <input
+                  id="entry-weight-input"
+                  class="calc-input"
+                  type="number"
+                  step="0.001"
+                  min="0.001"
+                  bind:value={entryWeight}
+                  placeholder="0.00"
+                  required
+                />
+              </div>
+
+              <div class="calc-row">
+                <label for="entry-making-input">Making Charges (%)</label>
+                <input
+                  id="entry-making-input"
+                  class="calc-input"
+                  type="number"
+                  step="0.1"
+                  min="0"
+                  bind:value={entryMakingCharge}
+                  placeholder="12.0"
+                  required
+                />
+              </div>
+
+              <div class="calc-row">
+                <label for="entry-fixed-input">Gem/Accents Value (₹)</label>
+                <input
+                  id="entry-fixed-input"
+                  class="calc-input"
+                  type="number"
+                  min="0"
+                  bind:value={entryFixedValue}
+                  placeholder="0"
+                />
+              </div>
+
+              <div class="calc-row">
+                <span
+                  style="font-size: 11px; font-weight: 600; text-transform: uppercase; color: var(--color-on-surface-variant); letter-spacing: 0.05em; margin-bottom: 6px; display: block;"
+                  >Generated Barcode ID</span
+                >
+                <div
+                  class="calc-input"
+                  style="background-color: var(--color-surface-lowest); border-color: var(--color-outline-variant); font-family: monospace; letter-spacing: 1px; color: var(--color-primary); display: flex; align-items: center;"
+                >
+                  {generatedBarcodeID}
+                </div>
+              </div>
+
+              <div class="calc-row form-full-width">
+                <label for="entry-name-input">Product Name</label>
+                <input
+                  id="entry-name-input"
+                  type="text"
+                  class="calc-input"
+                  value={isNameDirty ? entryName : autoName}
+                  oninput={(e) => {
+                    entryName = e.target.value;
+                    isNameDirty = e.target.value.trim() !== "";
+                  }}
+                  placeholder="e.g. Celestial Gold Ring"
+                />
+              </div>
+
+              <div class="calc-row form-full-width">
+                <label for="entry-desc-textarea">Description</label>
+                <textarea
+                  id="entry-desc-textarea"
+                  class="calc-input"
+                  style="resize: vertical; min-height: 60px;"
+                  value={isDescriptionDirty ? entryDescription : autoDesc}
+                  oninput={(e) => {
+                    entryDescription = e.target.value;
+                    isDescriptionDirty = e.target.value.trim() !== "";
+                  }}
+                  placeholder="Enter item description..."
+                ></textarea>
+              </div>
+            </div>
+
+            <div
+              class="barcode-preview-card"
+              style="display: flex; flex-direction: column; align-items: center; gap: 12px; width: 100%;"
+            >
+              <span
+                style="font-size: 10px; text-transform: uppercase; color: var(--color-on-surface-variant); letter-spacing: 0.1em; margin-bottom: 4px;"
+                >Real-Time Jewelry Barcode Tag Sticker Preview</span
+              >
+              <div
+                style="display: flex; gap: 20px; width: 100%; justify-content: center;"
+              >
+                <!-- Unified Barcode Sticker -->
+                <div
+                  style="background-color: white; color: black; padding: 16px; border-radius: var(--radius-sm); border: 1px solid var(--color-outline); width: 280px; display: flex; flex-direction: column; align-items: center; justify-content: center; box-shadow: var(--shadow-sm);"
+                >
+                  <div
+                    style="font-size: 9px; font-weight: 700; text-transform: uppercase; margin-bottom: 6px; letter-spacing: 0.8px; color: black;"
+                  >
+                    Sunrise Fine Jewells
+                  </div>
+
+                  <div
+                    class="barcode-svg-container"
+                    style="background-color: transparent; padding: 0; width: 100%; height: 45px; display: flex; align-items: center; justify-content: center; overflow: hidden; margin-bottom: 6px;"
+                  >
+                    {@html barcodeData.svgContent}
+                  </div>
+
+                  <div
+                    style="display: flex; width: 100%; justify-content: space-between; font-family: monospace; font-size: 8px; color: black; border-top: 1px dashed #ccc; padding-top: 6px; margin-top: 2px;"
+                  >
+                    <div>WT: {entryWeight || "0.00"} g</div>
+                    <div>
+                      {entryPurity === "Silver"
+                        ? "Silver"
+                        : `KT: ${entryPurity} Gold`}
+                    </div>
+                    <div>ID: {generatedBarcodeID}</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <button
+              type="submit"
+              class="btn btn-primary"
+              style="width: 100%; margin-top: 8px; display: flex; align-items: center; justify-content: center; gap: 8px;"
+            >
+              <span class="material-symbols-outlined" style="font-size: 16px;"
+                >add_box</span
+              >
+              Add Item to Stock
+            </button>
+
+            {#if formError}
+              <div class="alert-box alert-error" style="margin-top: 12px;">
+                <span class="material-symbols-outlined" style="font-size: 16px;"
+                  >error</span
+                >
+                {formError}
+              </div>
+            {/if}
+
+            {#if formSuccess && lastGeneratedLabel}
+              <div
+                style="margin-top: 16px; background: rgba(76,175,80,0.08); border: 1px solid rgba(76,175,80,0.3); border-radius: var(--radius-sm); padding: 16px; display: flex; flex-direction: column; align-items: center; gap: 12px;"
+              >
+                <div
+                  style="display: flex; align-items: center; gap: 8px; color: var(--color-success); font-size: 13px; font-weight: 600;"
+                >
+                  <span class="material-symbols-outlined" style="font-size: 18px;"
+                    >check_circle</span
+                  >
+                  {formSuccess}
+                </div>
+                <img
+                  src={lastGeneratedLabel.dataUri}
+                  alt="Label preview"
+                  style="max-width: 240px; border: 1px solid var(--color-outline-variant); border-radius: var(--radius-sm); background: white;"
+                />
+                <button
+                  type="button"
+                  class="btn btn-primary"
+                  style="display: flex; align-items: center; gap: 8px; padding: 10px 24px;"
+                  onclick={() =>
+                    downloadLabel(
+                      lastGeneratedLabel.dataUri,
+                      lastGeneratedLabel.id,
+                    )}
+                >
+                  <span class="material-symbols-outlined" style="font-size: 16px;"
+                    >download</span
+                  >
+                  Download Label PNG
+                </button>
+                <p
+                  style="font-size: 10px; color: var(--color-on-surface-variant); margin: 0;"
+                >
+                  Print & stick this label on the jewellery item
+                </p>
+              </div>
+            {/if}
+          </form>
+        {/if}
       </div>
 
       <!-- Stock Valuation Catalog Panel -->
@@ -1674,86 +1695,99 @@
         </div>
 
         <!-- Rate Override Control Inside Bullion Panel -->
-        <div
-          style="border-top: 1px solid rgba(153, 144, 124, 0.15); padding-top: 16px;"
-        >
+        {#if data.role === 'admin'}
           <div
-            class="control-group"
-            style="justify-content: space-between; width: 100%; margin-bottom: 12px;"
+            style="border-top: 1px solid rgba(153, 144, 124, 0.15); padding-top: 16px;"
           >
-            <span class="control-label" style="font-size: 11px;"
-              >Manual Override</span
+            <div
+              class="control-group"
+              style="justify-content: space-between; width: 100%; margin-bottom: 12px;"
             >
-            <label
-              class="switch-container"
-              aria-label="Toggle Manual Rate Override"
-            >
-              <input
-                class="switch-input"
-                type="checkbox"
-                bind:checked={isOverride}
-              />
-              <span class="switch-slider"></span>
-            </label>
-          </div>
+              <span class="control-label" style="font-size: 11px;"
+                >Manual Override</span
+              >
+              <label
+                class="switch-container"
+                aria-label="Toggle Manual Rate Override"
+              >
+                <input
+                  class="switch-input"
+                  type="checkbox"
+                  bind:checked={isOverride}
+                />
+                <span class="switch-slider"></span>
+              </label>
+            </div>
 
-          {#if isOverride}
-            <div
-              class="override-inputs"
-              style="flex-direction: column; align-items: stretch; gap: 12px; width: 100%;"
-            >
-              <div class="override-field">
-                <label for="gold-override-input">Override Gold 24K (₹/1g)</label
-                >
-                <input
-                  id="gold-override-input"
-                  class="input-number"
-                  style="width: 100%;"
-                  type="number"
-                  bind:value={customGold24k}
-                  min="5000"
-                  max="30000"
-                />
-              </div>
-              <div class="override-field">
-                <label for="silver-override-input">Override Silver (₹/1g)</label
-                >
-                <input
-                  id="silver-override-input"
-                  class="input-number"
-                  style="width: 100%;"
-                  type="number"
-                  bind:value={customSilver}
-                  step="0.1"
-                  min="100"
-                  max="500"
-                />
-              </div>
-              <button
-                class="btn btn-primary btn-small"
-                onclick={() => {
-                  customGold24k = gold24k;
-                  customSilver = silver;
-                }}
-                style="width: 100%; padding: 8px 16px;"
+            {#if isOverride}
+              <div
+                class="override-inputs"
+                style="flex-direction: column; align-items: stretch; gap: 12px; width: 100%;"
               >
-                Sync to Live
-              </button>
-            </div>
-          {:else}
-            <div
-              style="font-size: 11px; color: var(--color-on-surface-variant); display: flex; align-items: flex-start; gap: 6px; line-height: 1.4;"
-            >
-              <span
-                class="material-symbols-outlined"
-                style="font-size: 14px; color: var(--color-primary); flex-shrink: 0; margin-top: 1px;"
-                >info</span
+                <div class="override-field">
+                  <label for="gold-override-input">Override Gold 24K (₹/1g)</label
+                  >
+                  <input
+                    id="gold-override-input"
+                    class="input-number"
+                    style="width: 100%;"
+                    type="number"
+                    bind:value={customGold24k}
+                    min="5000"
+                    max="30000"
+                  />
+                </div>
+                <div class="override-field">
+                  <label for="silver-override-input">Override Silver (₹/1g)</label
+                  >
+                  <input
+                    id="silver-override-input"
+                    class="input-number"
+                    style="width: 100%;"
+                    type="number"
+                    bind:value={customSilver}
+                    step="0.1"
+                    min="100"
+                    max="500"
+                  />
+                </div>
+                <button
+                  class="btn btn-primary btn-small"
+                  onclick={() => {
+                    customGold24k = gold24k;
+                    customSilver = silver;
+                  }}
+                  style="width: 100%; padding: 8px 16px;"
+                >
+                  Sync to Live
+                </button>
+              </div>
+            {:else}
+              <div
+                style="font-size: 11px; color: var(--color-on-surface-variant); display: flex; align-items: flex-start; gap: 6px; line-height: 1.4;"
               >
-              Valuations dynamically update from live spot rates. Toggle switch to
-              override rates.
-            </div>
-          {/if}
-        </div>
+                <span
+                  class="material-symbols-outlined"
+                  style="font-size: 14px; color: var(--color-primary); flex-shrink: 0; margin-top: 1px;"
+                  >info</span
+                >
+                Valuations dynamically update from live spot rates. Toggle switch to
+                override rates.
+              </div>
+            {/if}
+          </div>
+        {:else}
+          <div
+            style="border-top: 1px solid rgba(153, 144, 124, 0.15); padding-top: 16px; font-size: 11px; color: var(--color-on-surface-variant); display: flex; align-items: flex-start; gap: 6px; line-height: 1.4;"
+          >
+            <span
+              class="material-symbols-outlined"
+              style="font-size: 14px; color: var(--color-primary); flex-shrink: 0; margin-top: 1px;"
+              >info</span
+            >
+            Spot rates are automatically fetched from market live feed. Rate override is restricted to administrators.
+          </div>
+        {/if}
       </div>
 
       <!-- Enhanced Total Inventory Summary Panel -->
