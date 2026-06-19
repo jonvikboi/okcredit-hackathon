@@ -12,11 +12,6 @@
     }
   });
 
-  function fillCredentials(u, p) {
-    username = u;
-    password = p;
-  }
-
   function handleSubmit() {
     loading = true;
   }
@@ -83,22 +78,7 @@
       </button>
     </form>
 
-    <!-- Demo Credentials Helper -->
-    <div class="demo-credentials-box">
-      <div class="demo-header-title">Public Demo Credentials</div>
-      <div class="demo-options">
-        <button type="button" class="demo-option-btn admin-theme" onclick={() => fillCredentials('admin', 'sunrise@213')}>
-          <div class="option-role">
-            <span class="role-badge badge-admin">Admin</span>
-            <span class="fill-action">Quick Fill</span>
-          </div>
-          <div class="option-creds">
-            <span>UN: <strong>admin</strong></span>
-            <span>PW: <strong>sunrise@213</strong></span>
-          </div>
-        </button>
-      </div>
-    </div>
+
 
     <div class="login-footer">
       Sunrise Fine Jewells &copy; 2026. Authorized Personnel Only.
@@ -297,93 +277,5 @@
     letter-spacing: 0.05em;
   }
 
-  .demo-credentials-box {
-    margin-top: 28px;
-    padding-top: 20px;
-    border-top: 1px dashed rgba(154, 123, 62, 0.2);
-    text-align: left;
-  }
 
-  .demo-header-title {
-    font-size: 11px;
-    font-weight: 700;
-    text-transform: uppercase;
-    letter-spacing: 0.1em;
-    color: rgba(215, 196, 164, 0.75);
-    margin-bottom: 12px;
-    text-align: center;
-  }
-
-  .demo-options {
-    display: flex;
-    flex-direction: column;
-    gap: 10px;
-  }
-
-  .demo-option-btn {
-    width: 100%;
-    background: rgba(18, 14, 11, 0.4);
-    border: 1.5px solid rgba(154, 123, 62, 0.15);
-    border-radius: 6px;
-    padding: 10px 14px;
-    text-align: left;
-    cursor: pointer;
-    transition: all 0.2s ease;
-    display: flex;
-    flex-direction: column;
-    gap: 4px;
-    box-sizing: border-box;
-  }
-
-  .demo-option-btn:hover {
-    background: rgba(154, 123, 62, 0.08);
-    border-color: rgba(154, 123, 62, 0.35);
-    transform: translateY(-1px);
-  }
-
-  .option-role {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    width: 100%;
-  }
-
-  .role-badge {
-    font-size: 9px;
-    font-weight: 700;
-    text-transform: uppercase;
-    letter-spacing: 0.05em;
-    padding: 2px 6px;
-    border-radius: 4px;
-  }
-
-  .badge-admin {
-    background: rgba(154, 123, 62, 0.2);
-    color: #c4a35a;
-    border: 1px solid rgba(154, 123, 62, 0.3);
-  }
-
-  .fill-action {
-    font-size: 9px;
-    font-weight: 600;
-    color: rgba(215, 196, 164, 0.5);
-    text-transform: uppercase;
-    letter-spacing: 0.05em;
-  }
-
-  .demo-option-btn:hover .fill-action {
-    color: #c4a35a;
-  }
-
-  .option-creds {
-    display: flex;
-    gap: 12px;
-    font-size: 11.5px;
-    color: rgba(215, 196, 164, 0.7);
-    font-family: var(--font-mono), monospace;
-  }
-
-  .option-creds strong {
-    color: #e8e2d8;
-  }
 </style>
