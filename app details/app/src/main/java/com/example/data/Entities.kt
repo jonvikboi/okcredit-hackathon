@@ -18,7 +18,8 @@ data class Product(
     val fixedValue: Double,
     val description: String,
     val status: String = "available", // available, sold, archived
-    val createdAt: Long = System.currentTimeMillis()
+    val createdAt: Long = System.currentTimeMillis(),
+    val isSynced: Boolean = true
 )
 
 @Entity(tableName = "rates")
@@ -45,7 +46,8 @@ data class Sale(
     val gst: Double,
     val total: Double,
     val paymentMethod: String,
-    val createdAt: Long = System.currentTimeMillis()
+    val createdAt: Long = System.currentTimeMillis(),
+    val isSynced: Boolean = true
 )
 
 @Entity(tableName = "audit_logs")
