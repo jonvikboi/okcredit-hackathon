@@ -47,19 +47,8 @@ async function seedUsers(db) {
       { upsert: true }
     );
 
-    // Upsert User
-    await usersCollection.updateOne(
-      { username: 'user' },
-      {
-        $set: {
-          password: 'user123',
-          role: 'user',
-          updatedAt: new Date()
-        },
-        $setOnInsert: { createdAt: new Date() }
-      },
-      { upsert: true }
-    );
+    // Remove standard user
+    await usersCollection.deleteOne({ username: 'user' });
 
     console.log('Credentials update/seeding completed successfully.');
   } catch (error) {

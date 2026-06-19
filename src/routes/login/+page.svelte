@@ -87,14 +87,14 @@
     <div class="demo-credentials-box">
       <div class="demo-header-title">Public Demo Credentials</div>
       <div class="demo-options">
-        <button type="button" class="demo-option-btn user-theme" onclick={() => fillCredentials('user', 'user123')}>
+        <button type="button" class="demo-option-btn admin-theme" onclick={() => fillCredentials('admin', 'sunrise@213')}>
           <div class="option-role">
-            <span class="role-badge badge-user">Worker</span>
+            <span class="role-badge badge-admin">Admin</span>
             <span class="fill-action">Quick Fill</span>
           </div>
           <div class="option-creds">
-            <span>UN: <strong>user</strong></span>
-            <span>PW: <strong>user123</strong></span>
+            <span>UN: <strong>admin</strong></span>
+            <span>PW: <strong>sunrise@213</strong></span>
           </div>
         </button>
       </div>
@@ -357,11 +357,10 @@
     border-radius: 4px;
   }
 
-
-  .badge-user {
-    background: rgba(59, 110, 94, 0.15);
-    color: #5bb095;
-    border: 1px solid rgba(59, 110, 94, 0.3);
+  .badge-admin {
+    background: rgba(154, 123, 62, 0.2);
+    color: #c4a35a;
+    border: 1px solid rgba(154, 123, 62, 0.3);
   }
 
   .fill-action {
