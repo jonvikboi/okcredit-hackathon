@@ -45,6 +45,15 @@ class MainViewModel(
     private val _cartItems = MutableStateFlow<List<CartItem>>(emptyList())
     val cartItems: StateFlow<List<CartItem>> = _cartItems.asStateFlow()
 
+    private val _invoices = MutableStateFlow<org.json.JSONArray?>(null)
+    val invoices: StateFlow<org.json.JSONArray?> = _invoices.asStateFlow()
+
+    fun fetchInvoices() {
+        viewModelScope.launch {
+            _invoices.value = inventoryRepository.fetchInvoices()
+        }
+    }
+
     fun refreshAll() {
         Log.d("RateFeed", "refreshAll triggered")
         viewModelScope.launch {
@@ -155,7 +164,8 @@ class MainViewModel(
                 paymentMethod = paymentMethod
             )
 
-            inventoryRepository.checkout(sale, cart.map { it.product.itemCode })
+            val totalWeight = cart.sumOf { it.product.weightGrams }
+            inventoryRepository.checkout(sale, cart.map { it.product.itemCode }, totalWeight)
             _cartItems.value = emptyList() // clear cart
         }
     }

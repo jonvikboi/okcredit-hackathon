@@ -33,6 +33,51 @@ class InventoryRepository(
     suspend fun refreshProducts() {
         _stockSyncStatus.value = "loading"
 
+        // 1. First, try to sync any queued offline products
+        try {
+            val unsyncedProducts = productDao.getUnsyncedProducts()
+            var productsSynced = 0
+            for (product in unsyncedProducts) {
+                val success = webApiRepository.saveProduct(product)
+                if (success) {
+                    productDao.insertProduct(product.copy(isSynced = true))
+                    productsSynced++
+                }
+            }
+
+            // 2. Next, try to sync any queued offline sales
+            val unsyncedSales = saleDao.getUnsyncedSales()
+            var salesSynced = 0
+            for (sale in unsyncedSales) {
+                val cartArray = org.json.JSONArray(sale.serializedItems)
+                val itemCodes = mutableListOf<String>()
+                var totalWeight = 0.0
+                for (i in 0 until cartArray.length()) {
+                    val cartItem = cartArray.getJSONObject(i)
+                    val productObj = cartItem.getJSONObject("product")
+                    itemCodes.add(productObj.getString("itemCode"))
+                    totalWeight += productObj.getDouble("weightGrams")
+                }
+                val deleteSuccess = webApiRepository.deleteProducts(itemCodes)
+                val invoiceSuccess = webApiRepository.saveInvoice(sale, totalWeight)
+                if (deleteSuccess && invoiceSuccess) {
+                    saleDao.insertSale(sale.copy(isSynced = true))
+                    salesSynced++
+                }
+            }
+
+            if (productsSynced > 0 || salesSynced > 0) {
+                auditLogDao.insertLog(
+                    AuditLog(
+                        type = "stock.sync_queue",
+                        message = "Auto-synced offline queue: $productsSynced products, $salesSynced sales"
+                    )
+                )
+            }
+        } catch (e: Exception) {
+            Log.e("InventoryRepo", "Error syncing offline queue", e)
+        }
+
         // Website API is the only reliable path on Android.
         // Direct MongoDB fails on phones with "Unable to resolve host" (DNS).
         try {
@@ -79,25 +124,46 @@ class InventoryRepository(
     }
 
     suspend fun saveProduct(product: Product) {
-        val saved = webApiRepository.saveProduct(product)
-        productDao.insertProduct(product)
+        var saved = false
+        try {
+            saved = webApiRepository.saveProduct(product)
+        } catch (e: Exception) {
+            Log.e("InventoryRepo", "saveProduct API failed", e)
+        }
+        val productToSave = product.copy(isSynced = saved)
+        productDao.insertProduct(productToSave)
         auditLogDao.insertLog(
             AuditLog(
                 type = "product.created",
-                message = if (saved) "Created product ${product.itemCode} via API" else "Created product ${product.itemCode} locally"
+                message = if (saved) "Created product ${product.itemCode} via API" else "Created product ${product.itemCode} locally (offline queue)"
             )
         )
         refreshProducts()
     }
 
-    suspend fun checkout(sale: Sale, itemCodes: List<String>) {
-        webApiRepository.deleteProducts(itemCodes)
-        saleDao.insertSale(sale)
+    suspend fun checkout(sale: Sale, itemCodes: List<String>, totalWeight: Double) {
+        var synced = false
+        try {
+            val deleteSuccess = webApiRepository.deleteProducts(itemCodes)
+            val invoiceSuccess = webApiRepository.saveInvoice(sale, totalWeight)
+            synced = deleteSuccess && invoiceSuccess
+        } catch (e: Exception) {
+            Log.e("InventoryRepo", "checkout API failed", e)
+        }
+        val saleToSave = sale.copy(isSynced = synced)
+        saleDao.insertSale(saleToSave)
         productDao.markProductsAsSold(itemCodes)
         auditLogDao.insertLog(
-            AuditLog(type = "sale.completed", message = "Completed sale ${sale.invoiceNo} with ${itemCodes.size} items")
+            AuditLog(
+                type = "sale.completed",
+                message = if (synced) "Completed sale ${sale.invoiceNo} with ${itemCodes.size} items" else "Completed sale ${sale.invoiceNo} locally (offline queue)"
+            )
         )
         refreshProducts()
+    }
+
+    suspend fun fetchInvoices(): org.json.JSONArray? {
+        return webApiRepository.getInvoices()
     }
 
     suspend fun generateNextItemCode(category: String): String {

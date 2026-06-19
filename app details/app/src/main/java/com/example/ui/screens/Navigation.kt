@@ -10,7 +10,7 @@ import androidx.navigation.compose.*
 import com.example.ui.MainViewModel
 
 @Composable
-fun AppNavigation(viewModel: MainViewModel) {
+fun AppNavigation(viewModel: MainViewModel, onLogout: () -> Unit) {
     val navController = rememberNavController()
 
     Scaffold(
@@ -25,9 +25,8 @@ fun AppNavigation(viewModel: MainViewModel) {
                     selected = currentRoute == "dashboard",
                     onClick = {
                         navController.navigate("dashboard") {
-                            popUpTo(navController.graph.startDestinationId) { saveState = true }
+                            popUpTo(navController.graph.startDestinationId)
                             launchSingleTop = true
-                            restoreState = true
                         }
                     }
                 )
@@ -37,21 +36,19 @@ fun AppNavigation(viewModel: MainViewModel) {
                     selected = currentRoute == "inventory",
                     onClick = {
                         navController.navigate("inventory") {
-                            popUpTo(navController.graph.startDestinationId) { saveState = true }
+                            popUpTo(navController.graph.startDestinationId)
                             launchSingleTop = true
-                            restoreState = true
                         }
                     }
                 )
                 NavigationBarItem(
-                    icon = { Icon(Icons.Default.Calculate, contentDescription = "Calculator") },
-                    label = { Text("Calculator") },
-                    selected = currentRoute == "calculator",
+                    icon = { Icon(Icons.Default.Receipt, contentDescription = "Invoices") },
+                    label = { Text("Invoices") },
+                    selected = currentRoute == "invoices",
                     onClick = {
-                        navController.navigate("calculator") {
-                            popUpTo(navController.graph.startDestinationId) { saveState = true }
+                        navController.navigate("invoices") {
+                            popUpTo(navController.graph.startDestinationId)
                             launchSingleTop = true
-                            restoreState = true
                         }
                     }
                 )
@@ -61,9 +58,8 @@ fun AppNavigation(viewModel: MainViewModel) {
                     selected = currentRoute == "scan",
                     onClick = {
                         navController.navigate("scan") {
-                            popUpTo(navController.graph.startDestinationId) { saveState = true }
+                            popUpTo(navController.graph.startDestinationId)
                             launchSingleTop = true
-                            restoreState = true
                         }
                     }
                 )
@@ -75,9 +71,9 @@ fun AppNavigation(viewModel: MainViewModel) {
             startDestination = "dashboard",
             modifier = Modifier.padding(innerPadding)
         ) {
-            composable("dashboard") { DashboardScreen(viewModel, navController) }
-            composable("inventory") { InventoryScreen(viewModel) }
-            composable("calculator") { CalculatorScreen(viewModel) }
+            composable("dashboard") { DashboardScreen(viewModel, navController, onLogout) }
+            composable("inventory") { InventoryScreen(viewModel, navController) }
+            composable("invoices") { InvoicesScreen(viewModel) }
             composable("scan") { ScannerScreen(viewModel, navController) }
             composable("cart") { CartScreen(viewModel, navController) }
         }

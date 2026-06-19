@@ -20,7 +20,7 @@ private val JewellsColorScheme = lightColorScheme(
     primary = PrimaryColor,
     onPrimary = Color(0xFFFFFFFF),
     primaryContainer = PrimaryLightColor,
-    onPrimaryContainer = Color(0xFF1A1612),
+    onPrimaryContainer = Color(0xFF1E1A15),
     secondary = AccentColor,
     onSecondary = Color(0xFFFFFFFF),
     background = BgColor,
@@ -34,12 +34,40 @@ private val JewellsColorScheme = lightColorScheme(
     onError = Color(0xFFFFFFFF)
 )
 
+private val JewellsDarkColorScheme = darkColorScheme(
+    primary = PrimaryColorDark,
+    onPrimary = Color(0xFF1C1814),
+    primaryContainer = PrimaryLightColorDark,
+    onPrimaryContainer = TextColorDark,
+    secondary = AccentColorDark,
+    onSecondary = Color(0xFF12100E),
+    background = BgColorDark,
+    onBackground = TextColorDark,
+    surface = SurfaceColorDark,
+    onSurface = TextColorDark,
+    surfaceVariant = SurfaceMutedColorDark,
+    onSurfaceVariant = TextMutedColorDark,
+    outline = BorderColorDark,
+    error = ErrorColorDark,
+    onError = Color(0xFF601410)
+)
+
 @Composable
 fun MyApplicationTheme(
     darkTheme: Boolean = isSystemInDarkTheme(),
     content: @Composable () -> Unit,
 ) {
-    val colorScheme = JewellsColorScheme
+    val colorScheme = if (darkTheme) JewellsDarkColorScheme else JewellsColorScheme
+
+    val view = LocalView.current
+    if (!view.isInEditMode) {
+        SideEffect {
+            val window = (view.context as Activity).window
+            window.statusBarColor = colorScheme.background.toArgb()
+            WindowCompat.getInsetsController(window, view).isAppearanceLightStatusBars = !darkTheme
+        }
+    }
 
     MaterialTheme(colorScheme = colorScheme, typography = Typography, shapes = Shapes, content = content)
 }
+

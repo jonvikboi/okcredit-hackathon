@@ -26,11 +26,12 @@ class WebApiRepository {
         private set
 
     private fun candidateBaseUrls(): List<String> {
+        val list = mutableListOf<String>()
         val configured = BuildConfig.WEB_API_URL.trim().removeSurrounding("\"").trimEnd('/')
         if (configured.isNotEmpty() && configured != "https://your-app.vercel.app") {
-            return listOf(configured)
+            list.add(configured)
         }
-        return if (BuildConfig.DEBUG) listOf("http://10.0.2.2:5173") else emptyList()
+        return list
     }
 
     suspend fun getAvailableProducts(): List<Product>? = withContext(Dispatchers.IO) {
@@ -177,4 +178,127 @@ class WebApiRepository {
     private fun normalizeMakingCharge(value: Double): Double {
         return if (value > 0 && value <= 1) value * 100 else value
     }
+
+    suspend fun saveInvoice(sale: Sale, totalWeight: Double): Boolean = withContext(Dispatchers.IO) {
+        val payload = JSONObject().apply {
+            put("invoiceId", sale.invoiceNo)
+            val sdf = java.text.SimpleDateFormat("M/d/yyyy, h:mm:ss a", java.util.Locale.US)
+            put("date", sdf.format(java.util.Date(sale.createdAt)))
+            put("createdAt", sale.createdAt)
+            put("customerName", sale.customerName)
+            put("customerPhone", sale.customerPhone)
+            // Parse serializedItems to send as JSONArray
+            try {
+                put("items", JSONArray(sale.serializedItems))
+            } catch (e: Exception) {
+                put("items", JSONArray())
+            }
+            put("totalWeight", totalWeight)
+            put("subtotal", sale.subtotal)
+            put("gst", sale.gst)
+            put("total", sale.total)
+            put("paymentMethod", sale.paymentMethod)
+        }
+
+        for (baseUrl in candidateBaseUrls()) {
+            try {
+                val body = payload.toString().toRequestBody("application/json".toMediaType())
+                val request = Request.Builder().url("$baseUrl/api/invoices").post(body).build()
+                client.newCall(request).execute().use { response ->
+                    if (response.isSuccessful) return@withContext true
+                    lastError = "$baseUrl returned HTTP ${response.code}"
+                }
+            } catch (e: Exception) {
+                lastError = "$baseUrl: ${e.message ?: "connection failed"}"
+                Log.w("WebApiRepo", "POST to $baseUrl/api/invoices failed", e)
+            }
+        }
+        false
+    }
+
+    suspend fun getInvoices(): JSONArray? = withContext(Dispatchers.IO) {
+        for (baseUrl in candidateBaseUrls()) {
+            val url = "$baseUrl/api/invoices"
+            try {
+                val request = Request.Builder()
+                    .url(url)
+                    .header("User-Agent", "SunriseJewelsAndroid/1.0")
+                    .header("Accept", "application/json")
+                    .get()
+                    .build()
+
+                client.newCall(request).execute().use { response ->
+                    val body = response.body?.string()
+                    if (response.isSuccessful && !body.isNullOrBlank()) {
+                        val json = JSONObject(body)
+                        if (json.optBoolean("success", false)) {
+                            return@withContext json.optJSONArray("invoices")
+                        }
+                    }
+                }
+            } catch (e: Exception) {
+                lastError = "$baseUrl: ${e.message ?: "connection failed"}"
+                Log.w("WebApiRepo", "GET $url failed", e)
+            }
+        }
+        null
+    }
+
+    suspend fun login(username: String, password: String): LoginResult = withContext(Dispatchers.IO) {
+        val payload = JSONObject().apply {
+            put("username", username)
+            put("password", password)
+        }
+
+        val bases = candidateBaseUrls()
+        if (bases.isEmpty()) {
+            return@withContext LoginResult.Failure("WEB_API_URL is not set. Please add it to app details/.env and rebuild.")
+        }
+
+        var lastMsg = "Connection failed"
+        for (baseUrl in bases) {
+            try {
+                val body = payload.toString().toRequestBody("application/json".toMediaType())
+                val request = Request.Builder().url("$baseUrl/api/login").post(body).build()
+                client.newCall(request).execute().use { response ->
+                    val responseBody = response.body?.string()
+                    val contentType = response.header("Content-Type") ?: ""
+                    
+                    if (response.isSuccessful && !responseBody.isNullOrBlank()) {
+                        if (contentType.contains("application/json")) {
+                            val json = JSONObject(responseBody)
+                            if (json.optBoolean("success", false)) {
+                                val role = json.optString("role", "user")
+                                return@withContext LoginResult.Success(username = username, role = role)
+                            } else {
+                                val err = json.optString("error", "Invalid credentials")
+                                return@withContext LoginResult.Failure(err)
+                            }
+                        } else {
+                            lastMsg = "Unexpected response from $baseUrl. Make sure SvelteKit backend is running."
+                        }
+                    } else if (!responseBody.isNullOrBlank()) {
+                        if (contentType.contains("application/json")) {
+                            val json = JSONObject(responseBody)
+                            val err = json.optString("error", "Invalid credentials")
+                            return@withContext LoginResult.Failure(err)
+                        } else {
+                            lastMsg = "$baseUrl (HTTP ${response.code}): SvelteKit backend may not have `/api/login` deployed yet."
+                        }
+                    } else {
+                        lastMsg = "$baseUrl error (HTTP ${response.code})"
+                    }
+                }
+            } catch (e: Exception) {
+                lastMsg = "$baseUrl: ${e.message ?: "connection failed"}"
+                Log.w("WebApiRepo", "POST to $baseUrl/api/login failed", e)
+            }
+        }
+        LoginResult.Failure(lastMsg)
+    }
+}
+
+sealed interface LoginResult {
+    data class Success(val username: String, val role: String) : LoginResult
+    data class Failure(val error: String) : LoginResult
 }
