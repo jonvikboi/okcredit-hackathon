@@ -3,7 +3,10 @@
 
   // State variables (Svelte 5 runes) received from +page.server.js load
   let { data } = $props();
-  let products = $state(data.products || []);
+  let products = $state([]);
+  $effect(() => {
+    products = data.products || [];
+  });
   let gold24k = $state(15485); // live rate (₹/g)
   let silver = $state(266.16); // live rate (₹/g)
   let connectionStatus = $state("connecting"); // 'live' | 'polling' | 'connecting'
