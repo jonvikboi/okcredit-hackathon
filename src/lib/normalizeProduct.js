@@ -13,6 +13,7 @@ export function normalizeProduct(doc) {
 
 	return {
 		id,
+		_id: doc._id ? String(doc._id) : id,
 		name: doc.name ?? id,
 		purity: doc.purity ?? '22K',
 		weight,

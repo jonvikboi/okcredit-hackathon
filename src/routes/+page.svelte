@@ -3,7 +3,10 @@
 
   // State variables (Svelte 5 runes) received from +page.server.js load
   let { data } = $props();
-  let products = $state(data.products || []);
+  let products = $state([]);
+  $effect(() => {
+    products = data.products || [];
+  });
   let gold24k = $state(15485); // live rate (₹/g)
   let silver = $state(266.16); // live rate (₹/g)
   let connectionStatus = $state("connecting"); // 'live' | 'polling' | 'connecting'
@@ -230,16 +233,16 @@
   async function fetchRatesFromAPI() {
     try {
       const res = await fetch("/api/rates");
-      const data = await res.json();
-      if (data.success) {
+      const ratesData = await res.json();
+      if (ratesData.success) {
         if (connectionStatus !== "live") {
-          gold24k = data.gold24k;
-          silver = data.silver;
-          timestamp = new Date(data.timestamp).toLocaleTimeString();
+          gold24k = ratesData.gold24k;
+          silver = ratesData.silver;
+          timestamp = new Date(ratesData.timestamp).toLocaleTimeString();
           connectionStatus = "polling";
         }
-        if (data.logs) {
-          auditLogs = data.logs;
+        if (ratesData.logs) {
+          auditLogs = ratesData.logs;
         }
       }
     } catch (err) {
@@ -268,10 +271,10 @@
         for (const part of parts) {
           if (!part.trim()) continue;
           try {
-            const data = JSON.parse(part);
+            const wsMsg = JSON.parse(part);
             if (
-              Object.keys(data).length === 0 ||
-              (!data.target && data.type === undefined)
+              Object.keys(wsMsg).length === 0 ||
+              (!wsMsg.target && wsMsg.type === undefined)
             ) {
               ws.send(
                 JSON.stringify({
@@ -285,15 +288,15 @@
             }
 
             if (
-              data.target &&
+              wsMsg.target &&
               [
                 "workerPublish",
                 "workerPublishCoin",
                 "referanceDetails",
                 "symbolDetails",
-              ].includes(data.target)
+              ].includes(wsMsg.target)
             ) {
-              const encoded = data.arguments[0];
+              const encoded = wsMsg.arguments[0];
               const decoded = await decodeAndDecompress(encoded);
               if (decoded && decoded.refProduct) {
                 processProducts(decoded.refProduct);
@@ -793,11 +796,11 @@
       if (filterMaxAmount) params.append("maxAmount", filterMaxAmount);
 
       const res = await fetch(`/api/invoices?${params.toString()}`);
-      const data = await res.json();
-      if (data.success) {
-        ledgerInvoices = data.invoices;
+      const ledgerData = await res.json();
+      if (ledgerData.success) {
+        ledgerInvoices = ledgerData.invoices;
       } else {
-        console.error("Failed to fetch ledger invoices:", data.error);
+        console.error("Failed to fetch ledger invoices:", ledgerData.error);
       }
     } catch (err) {
       console.error("Error fetching ledger invoices:", err);
@@ -1340,7 +1343,7 @@
               </tr>
             </thead>
             <tbody>
-              {#each filteredProducts as product (product.id)}
+              {#each filteredProducts as product (product._id || product.id)}
                 <tr>
                   <td><span class="id-badge">{product.id}</span></td>
                   <td>
@@ -2213,7 +2216,7 @@
             </p>
           </div>
         {:else}
-          {#each cart as item (item.id)}
+          {#each cart as item (item._id || item.id)}
             <div class="cart-item">
               <div class="cart-item-info">
                 <span class="cart-item-name">{item.name}</span>
