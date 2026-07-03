@@ -455,23 +455,6 @@
     "_id": "6a462706cc2ed022d5c65a42"
   },
   {
-    "id": "RNG-20260627-001",
-    "itemCode": "RNG-20260627-001",
-    "name": "Classic Band",
-    "category": "Ring",
-    "metal": "Gold",
-    "purity": "24K",
-    "weight": 3.5,
-    "weightGrams": 3.5,
-    "makingCharge": 0.08,
-    "makingChargePercent": 8,
-    "fixedValue": 2000,
-    "description": "Premium hand-crafted 24K gold ring from our historical collection.",
-    "status": "available",
-    "createdAt": 1782561600000,
-    "_id": "6a4789e6afc2f72e76d6563a"
-  },
-  {
     "id": "NKL-20260627-001",
     "itemCode": "NKL-20260627-001",
     "name": "Modern Choker",
@@ -759,23 +742,6 @@
     "status": "available",
     "createdAt": 1782561600000,
     "_id": "6a4789e6afc2f72e76d6564b"
-  },
-  {
-    "id": "RNG-20260628-001",
-    "itemCode": "RNG-20260628-001",
-    "name": "Vintage Signet Ring",
-    "category": "Ring",
-    "metal": "Gold",
-    "purity": "22K",
-    "weight": 3.5,
-    "weightGrams": 3.5,
-    "makingCharge": 0.08,
-    "makingChargePercent": 8,
-    "fixedValue": 0,
-    "description": "Premium hand-crafted 22K gold ring from our historical collection.",
-    "status": "available",
-    "createdAt": 1782648000000,
-    "_id": "6a4789e6afc2f72e76d6564c"
   },
   {
     "id": "NKL-20260628-001",
@@ -1067,23 +1033,6 @@
     "_id": "6a4789e6afc2f72e76d6565d"
   },
   {
-    "id": "RNG-20260629-001",
-    "itemCode": "RNG-20260629-001",
-    "name": "Glimmering Infinity Ring",
-    "category": "Ring",
-    "metal": "Gold",
-    "purity": "18K",
-    "weight": 3.5,
-    "weightGrams": 3.5,
-    "makingCharge": 0.08,
-    "makingChargePercent": 8,
-    "fixedValue": 0,
-    "description": "Premium hand-crafted 18K gold ring from our historical collection.",
-    "status": "available",
-    "createdAt": 1782734400000,
-    "_id": "6a4789e6afc2f72e76d6565e"
-  },
-  {
     "id": "NKL-20260629-001",
     "itemCode": "NKL-20260629-001",
     "name": "Classic Chain",
@@ -1373,23 +1322,6 @@
     "_id": "6a4789e6afc2f72e76d6566f"
   },
   {
-    "id": "RNG-20260630-001",
-    "itemCode": "RNG-20260630-001",
-    "name": "Royal Engagement Ring",
-    "category": "Ring",
-    "metal": "Silver",
-    "purity": "Silver",
-    "weight": 3.5,
-    "weightGrams": 3.5,
-    "makingCharge": 0.08,
-    "makingChargePercent": 8,
-    "fixedValue": 0,
-    "description": "Premium hand-crafted Silver silver ring from our historical collection.",
-    "status": "available",
-    "createdAt": 1782820800000,
-    "_id": "6a4789e6afc2f72e76d65670"
-  },
-  {
     "id": "NKL-20260630-001",
     "itemCode": "NKL-20260630-001",
     "name": "Vintage Lariat",
@@ -1677,23 +1609,6 @@
     "status": "available",
     "createdAt": 1782820800000,
     "_id": "6a4789e6afc2f72e76d65681"
-  },
-  {
-    "id": "RNG-20260701-001",
-    "itemCode": "RNG-20260701-001",
-    "name": "Imperial Cluster Ring",
-    "category": "Ring",
-    "metal": "Gold",
-    "purity": "24K",
-    "weight": 3.5,
-    "weightGrams": 3.5,
-    "makingCharge": 0.08,
-    "makingChargePercent": 8,
-    "fixedValue": 2000,
-    "description": "Premium hand-crafted 24K gold ring from our historical collection.",
-    "status": "available",
-    "createdAt": 1782907200000,
-    "_id": "6a4789e6afc2f72e76d65682"
   },
   {
     "id": "NKL-20260701-001",
