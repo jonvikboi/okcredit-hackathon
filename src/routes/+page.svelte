@@ -14,6 +14,7 @@
 
   // Cart & Sales state (Svelte 5 runes)
   let cart = $state([]);
+  let resaleCart = $state([]);
   let showCartDrawer = $state(false);
   let showInvoiceModal = $state(false);
   /** @type {any} */
@@ -133,6 +134,15 @@
   let cartTotalPrice = $derived(
     cart.reduce((acc, item) => acc + item.totalPrice, 0),
   );
+
+  // Derived resale calculations
+  let resaleTotalWeight = $derived(
+    resaleCart.reduce((acc, item) => acc + Number(item.weight), 0)
+  );
+  let resaleTotalValue = $derived(
+    resaleCart.reduce((acc, item) => acc + Number(item.finalValue), 0)
+  );
+  let netPayable = $derived(cartTotalPrice - resaleTotalValue);
 
   // Format currency helper
   function formatCurrency(val) {
@@ -354,6 +364,51 @@
   let entryDescription = $state("");
   let isNameDirty = $state(false);
   let isDescriptionDirty = $state(false);
+
+  function addToResaleCart(e) {
+    if (e) e.preventDefault();
+    if (!resaleWeight || Number(resaleWeight) <= 0) {
+      alert("Please enter a valid weight.");
+      return;
+    }
+    const item = {
+      id: "RSL-" + Date.now().toString().slice(-6),
+      name: `Old ${resaleMetal} (${resaleMetal === 'Silver' ? '99.9%' : resalePurity})`,
+      metal: resaleMetal,
+      purity: resalePurity,
+      weight: Number(resaleWeight),
+      rate: activeResaleRate,
+      grossValue: Number(resaleWeight) * activeResaleRate,
+      deduction: Number(resaleDeduction) || 0,
+      finalValue: resaleComputedValue
+    };
+    resaleCart = [...resaleCart, item];
+    playBeep(800, 0.05);
+    resaleWeight = "";
+    resaleDeduction = "";
+    showCartDrawer = true;
+  }
+
+  // Resale/Exchange entry state variables
+  let resaleMetal = $state("Gold");
+  let resalePurity = $state("22K");
+  let resaleWeight = $state("");
+  let resaleDeduction = $state(""); // ₹
+
+  let activeResaleRate = $derived.by(() => {
+    if (resaleMetal === "Silver") return activeSilver;
+    if (resalePurity === "24K") return activeGold24k;
+    if (resalePurity === "22K") return activeGold22k;
+    if (resalePurity === "18K") return activeGold18k;
+    return activeGold24k;
+  });
+
+  let resaleComputedValue = $derived.by(() => {
+    const w = Number(resaleWeight) || 0;
+    const gross = w * activeResaleRate;
+    const ded = Number(resaleDeduction) || 0;
+    return Math.max(0, gross - ded);
+  });
   let formError = $state("");
   let formSuccess = $state("");
   /** @type {any} */
@@ -688,32 +743,48 @@
     playBeep(600, 0.04);
   }
 
+  function removeFromResaleCart(itemId) {
+    resaleCart = resaleCart.filter((item) => item.id !== itemId);
+    playBeep(600, 0.04);
+  }
+
   async function handleCheckout(e) {
     if (e) e.preventDefault();
-    if (cart.length === 0) return;
+    if (cart.length === 0 && resaleCart.length === 0) return;
 
     checkoutStatus = "loading";
     const productIds = cart.map((item) => item.id);
 
     try {
-      const res = await fetch("/api/products", {
-        method: "DELETE",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ids: productIds }),
-      });
+      let success = true;
 
-      const result = await res.json();
-      if (result.success) {
+      if (cart.length > 0) {
+        const res = await fetch("/api/products", {
+          method: "DELETE",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ ids: productIds }),
+        });
+        const result = await res.json();
+        if (!result.success) {
+          success = false;
+          alert("Checkout failed: " + (result.error || "Unknown error"));
+          checkoutStatus = "error";
+        }
+      }
+
+      if (success) {
         // Play checkout success sound
         playBeep(900, 0.1);
         setTimeout(() => playBeep(1200, 0.15), 120);
 
         // Remove sold products from products array in state
-        products = products.filter((p) => !productIds.includes(p.id));
+        if (cart.length > 0) {
+          products = products.filter((p) => !productIds.includes(p.id));
+        }
 
         // Construct invoice details
         const invoiceData = {
-          invoiceId: "SRF-" + Math.floor(100000 + Math.random() * 900000),
+          invoiceId: (cart.length === 0 ? "PUR-" : "SRF-") + Math.floor(100000 + Math.random() * 900000),
           date: new Date().toLocaleString(),
           createdAt: new Date().toISOString(),
           customerName: customerName.trim() || "Walk-in Customer",
@@ -735,6 +806,12 @@
           subtotal: cartSubtotal,
           gst: cartGst,
           total: cartTotalPrice,
+          
+          // Resale Information
+          resaleItems: resaleCart.map((item) => ({ ...item })),
+          totalResaleWeight: resaleTotalWeight,
+          totalResaleValue: resaleTotalValue,
+          netPayable: netPayable,
         };
 
         // Save invoice to MongoDB
@@ -754,6 +831,7 @@
 
         // Clear cart and close drawer
         cart = [];
+        resaleCart = [];
         showCartDrawer = false;
         checkoutStatus = "success";
         showInvoiceModal = true;
@@ -761,9 +839,6 @@
         // Reset customer details
         customerName = "";
         customerPhone = "";
-      } else {
-        alert("Checkout failed: " + (result.error || "Unknown error"));
-        checkoutStatus = "error";
       }
     } catch (err) {
       console.error("Checkout error:", err);
@@ -813,6 +888,9 @@
     lastInvoice = invoice;
     showInvoiceModal = true;
   }
+
+  // Active tab navigation
+  let activeTab = $state('overview'); // 'overview' | 'inventory' | 'addstock' | 'invoices'
 
   // Scanner state variables (Svelte 5 runes)
   let showScannerModal = $state(false);
@@ -960,22 +1038,18 @@
         <span class="material-symbols-outlined" style="font-size: 16px;"
           >shopping_cart</span
         >
-        Cart ({cart.length})
-        {#if cart.length > 0}
+        Cart ({cart.length + resaleCart.length})
+        {#if (cart.length + resaleCart.length) > 0}
           <span
             style="position: absolute; top: -6px; right: -6px; background-color: var(--color-error); color: white; border-radius: 50%; font-size: 9px; width: 16px; height: 16px; display: flex; align-items: center; justify-content: center; font-weight: bold; box-shadow: 0 2px 4px rgba(0,0,0,0.2);"
           >
-            {cart.length}
+            {cart.length + resaleCart.length}
           </span>
         {/if}
       </button>
 
       <button class="btn btn-secondary btn-small" onclick={fetchRatesFromAPI}>
-        Force Log Pull <span
-          class="material-symbols-outlined"
-          style="font-size: 12px; vertical-align: middle; margin-left: 4px;"
-          >refresh</span
-        >
+        Force Log Pull <span class="material-symbols-outlined" style="font-size: 12px; vertical-align: middle; margin-left: 4px;">refresh</span>
       </button>
 
       <form action="/login?/logout" method="POST" style="margin: 0; display: inline-flex;">
@@ -986,303 +1060,237 @@
     </div>
   </div>
 
-  <div class="dashboard-grid">
-    <!-- Left Column: Stock Entry & Stock Catalog -->
-    <div style="display: flex; flex-direction: column; gap: 24px;">
-      <!-- Merchant Stock Entry Panel -->
-      <div class="panel">
-        <h2
-          class="panel-title"
-          style="margin-bottom: 16px; border-bottom: 1px solid rgba(153, 144, 124, 0.15); padding-bottom: 8px; display: flex; align-items: center; gap: 8px;"
-        >
-          <span
-            class="material-symbols-outlined"
-            style="color: var(--color-primary);">inventory_2</span
-          >
-          Merchant Stock Entry
-        </h2>
+  <!-- Tab Navigation Bar -->
+  <div class="tab-nav-bar">
+    <button class="tab-nav-btn {activeTab === 'overview' ? 'tab-active' : ''}" onclick={() => (activeTab = 'overview')} id="tab-overview">
+      <span class="material-symbols-outlined tab-icon">dashboard</span>
+      Overview
+    </button>
+    <button class="tab-nav-btn {activeTab === 'inventory' ? 'tab-active' : ''}" onclick={() => (activeTab = 'inventory')} id="tab-inventory">
+      <span class="material-symbols-outlined tab-icon">list_alt</span>
+      Inventory
+      <span class="tab-badge">{filteredProducts.length}</span>
+    </button>
+    {#if data.role === 'admin'}
+    <button class="tab-nav-btn {activeTab === 'addstock' ? 'tab-active' : ''}" onclick={() => (activeTab = 'addstock')} id="tab-addstock">
+      <span class="material-symbols-outlined tab-icon">add_box</span>
+      Add Stock
+    </button>
+    {/if}
+    <button class="tab-nav-btn {activeTab === 'invoices' ? 'tab-active' : ''}" onclick={() => (activeTab = 'invoices')} id="tab-invoices">
+      <span class="material-symbols-outlined tab-icon">receipt_long</span>
+      Invoices
+      {#if ledgerInvoices.length > 0}
+        <span class="tab-badge">{ledgerInvoices.length}</span>
+      {/if}
+    </button>
+    <button class="tab-nav-btn {activeTab === 'resale' ? 'tab-active' : ''}" onclick={() => (activeTab = 'resale')} id="tab-resale">
+      <span class="material-symbols-outlined tab-icon">currency_exchange</span>
+      Resale/Exchange
+    </button>
+  </div>
 
-        {#if data.role !== 'admin'}
-          <div class="alert-box alert-error" style="background: rgba(185, 28, 28, 0.05); border-color: rgba(185, 28, 28, 0.15); display: flex; flex-direction: column; align-items: center; text-align: center; padding: 32px 24px; gap: 12px; margin-top: 8px;">
-            <span class="material-symbols-outlined" style="font-size: 44px; color: var(--color-error);">lock</span>
-            <div style="font-weight: 600; color: var(--color-on-surface); font-size: 15px;">Access Restricted</div>
-            <p style="font-size: 12px; color: var(--color-on-surface-variant); margin: 0; line-height: 1.6; max-width: 300px;">
-              You are signed in as a standard user. Stock additions and modifications are restricted to store administrators.
-            </p>
+  <!-- Tab Panels -->
+  <div class="tab-content">
+
+    <!-- TAB 1: OVERVIEW -->
+    {#if activeTab === 'overview'}
+    <div class="tab-panel overview-grid">
+
+      <div style="display: flex; flex-direction: column; gap: 24px;">
+        <!-- Live Bullion Rates Panel -->
+        <div class="panel">
+          <h2 class="panel-title" style="margin-bottom: 12px; display: flex; align-items: center; justify-content: space-between;">
+            <span style="display: flex; align-items: center; gap: 6px;">
+              <span class="indicator-dot {isOverride ? 'override' : connectionStatus}"></span>
+              Live Bullion Rates
+            </span>
+            <span style="font-size: 10px; font-weight: normal; color: var(--color-on-surface-variant); font-family: monospace;">
+              {timestamp ? timestamp : "Connecting..."}
+            </span>
+          </h2>
+
+          <div style="display: flex; flex-direction: column; gap: 4px; margin-bottom: 16px;">
+            <div class="sidebar-rate-row">
+              <div class="rate-row-left">
+                <span class="rate-purity-badge badge-gold" style="background-color: rgba(242, 202, 80, 0.15);">24K Gold</span>
+                <span style="font-size: 12px; color: var(--color-on-surface-variant);">99.9% Purity</span>
+              </div>
+              <span class="rate-value-display">{formatCurrency(activeGold24k)}</span>
+            </div>
+            <div class="sidebar-rate-row">
+              <div class="rate-row-left">
+                <span class="rate-purity-badge badge-gold" style="background-color: rgba(242, 202, 80, 0.1);">22K Gold</span>
+                <span style="font-size: 12px; color: var(--color-on-surface-variant);">91.6% Purity</span>
+              </div>
+              <span class="rate-value-display">{formatCurrency(activeGold22k)}</span>
+            </div>
+            <div class="sidebar-rate-row">
+              <div class="rate-row-left">
+                <span class="rate-purity-badge badge-gold" style="background-color: rgba(242, 202, 80, 0.05);">18K Gold</span>
+                <span style="font-size: 12px; color: var(--color-on-surface-variant);">75.0% Purity</span>
+              </div>
+              <span class="rate-value-display">{formatCurrency(activeGold18k)}</span>
+            </div>
+            <div class="sidebar-rate-row">
+              <div class="rate-row-left">
+                <span class="rate-purity-badge badge-gold" style="background-color: rgba(215, 196, 164, 0.1); color: var(--color-secondary); border-color: rgba(215, 196, 164, 0.2);">Silver</span>
+                <span style="font-size: 12px; color: var(--color-on-surface-variant);">99.9% Pure</span>
+              </div>
+              <span class="rate-value-display">₹{activeSilver}</span>
+            </div>
           </div>
-        {:else}
-          {#if formError}
-            <div class="alert-box alert-error">
-              <span class="material-symbols-outlined" style="font-size: 18px;"
-                >error</span
-              >
-              <span>{formError}</span>
+
+          <!-- Rate Override Control -->
+          {#if data.role === 'admin'}
+            <div style="border-top: 1px solid rgba(153, 144, 124, 0.15); padding-top: 16px;">
+              <div class="control-group" style="justify-content: space-between; width: 100%; margin-bottom: 12px;">
+                <span class="control-label" style="font-size: 11px;">Manual Override</span>
+                <label class="switch-container" aria-label="Toggle Manual Rate Override">
+                  <input class="switch-input" type="checkbox" bind:checked={isOverride} />
+                  <span class="switch-slider"></span>
+                </label>
+              </div>
+              {#if isOverride}
+                <div class="override-inputs" style="flex-direction: column; align-items: stretch; gap: 12px; width: 100%;">
+                  <div class="override-field">
+                    <label for="gold-override-input">Override Gold 24K (₹/1g)</label>
+                    <input id="gold-override-input" class="input-number" style="width: 100%;" type="number" bind:value={customGold24k} min="5000" max="30000" />
+                  </div>
+                  <div class="override-field">
+                    <label for="silver-override-input">Override Silver (₹/1g)</label>
+                    <input id="silver-override-input" class="input-number" style="width: 100%;" type="number" bind:value={customSilver} step="0.1" min="100" max="500" />
+                  </div>
+                  <button class="btn btn-primary btn-small" onclick={() => { customGold24k = gold24k; customSilver = silver; }} style="width: 100%; padding: 8px 16px;">Sync to Live</button>
+                </div>
+              {:else}
+                <div style="font-size: 11px; color: var(--color-on-surface-variant); display: flex; align-items: flex-start; gap: 6px; line-height: 1.4;">
+                  <span class="material-symbols-outlined" style="font-size: 14px; color: var(--color-primary); flex-shrink: 0; margin-top: 1px;">info</span>
+                  Valuations dynamically update from live spot rates. Toggle switch to override rates.
+                </div>
+              {/if}
+            </div>
+          {:else}
+            <div style="border-top: 1px solid rgba(153, 144, 124, 0.15); padding-top: 16px; font-size: 11px; color: var(--color-on-surface-variant); display: flex; align-items: flex-start; gap: 6px; line-height: 1.4;">
+              <span class="material-symbols-outlined" style="font-size: 14px; color: var(--color-primary); flex-shrink: 0; margin-top: 1px;">info</span>
+              Spot rates are automatically fetched from market live feed. Rate override is restricted to administrators.
             </div>
           {/if}
+        </div>
 
-          {#if formSuccess}
-            <div class="alert-box alert-success">
-              <span class="material-symbols-outlined" style="font-size: 18px;"
-                >check_circle</span
-              >
-              <span>{formSuccess}</span>
-            </div>
-          {/if}
-
-          <form onsubmit={addStockItem} class="calc-form">
-            <div class="entry-form-grid">
-              <div class="calc-row">
-                <label for="entry-category-select">Product Category</label>
-                <select
-                  id="entry-category-select"
-                  class="select-input"
-                  bind:value={entryCategory}
-                >
-                  <option value="Ring">Ring</option>
-                  <option value="Necklace">Necklace</option>
-                  <option value="Bracelet">Bracelet</option>
-                  <option value="Earrings">Earrings</option>
-                  <option value="Watch">Watch</option>
-                </select>
+        <!-- Live Feed Ticks Panel -->
+        <div class="panel">
+          <h2 class="panel-title" style="margin-bottom: 12px; display: flex; align-items: center; justify-content: space-between;">
+            <span style="display: flex; align-items: center; gap: 6px;">
+              <span class="material-symbols-outlined" style="color: var(--color-primary); font-size: 18px;">terminal</span>
+              Recent Live Feed Ticks
+            </span>
+            <span style="font-size: 9px; font-family: monospace; color: var(--color-on-surface-variant); font-weight: normal;">Live Feed Tracker</span>
+          </h2>
+          <div class="console-container">
+            {#each auditLogs as log}
+              <div class="console-row">
+                <span class="console-time">{log.timestamp.split(" ")[1] || log.timestamp}</span>
+                <span class="console-symbol">{log.symbol}</span>
+                <span class="console-rate">Ask: ₹{log.ask.toLocaleString()}</span>
               </div>
-
-              <div class="calc-row">
-                <label for="entry-purity-select">Quality / Purity</label>
-                <select
-                  id="entry-purity-select"
-                  class="select-input"
-                  bind:value={entryPurity}
-                >
-                  <option value="24K">24K Gold (99.9%)</option>
-                  <option value="22K">22K Gold (91.6%)</option>
-                  <option value="18K">18K Gold (75.0%)</option>
-                  <option value="Silver">Silver (99.9%)</option>
-                </select>
-              </div>
-
-              <div class="calc-row">
-                <label for="entry-weight-input">Weight (grams)</label>
-                <input
-                  id="entry-weight-input"
-                  class="calc-input"
-                  type="number"
-                  step="0.001"
-                  min="0.001"
-                  bind:value={entryWeight}
-                  placeholder="0.00"
-                  required
-                />
-              </div>
-
-              <div class="calc-row">
-                <label for="entry-making-input">Making Charges (%)</label>
-                <input
-                  id="entry-making-input"
-                  class="calc-input"
-                  type="number"
-                  step="0.1"
-                  min="0"
-                  bind:value={entryMakingCharge}
-                  placeholder="12.0"
-                  required
-                />
-              </div>
-
-              <div class="calc-row">
-                <label for="entry-fixed-input">Gem/Accents Value (₹)</label>
-                <input
-                  id="entry-fixed-input"
-                  class="calc-input"
-                  type="number"
-                  min="0"
-                  bind:value={entryFixedValue}
-                  placeholder="0"
-                />
-              </div>
-
-              <div class="calc-row">
-                <span
-                  style="font-size: 11px; font-weight: 600; text-transform: uppercase; color: var(--color-on-surface-variant); letter-spacing: 0.05em; margin-bottom: 6px; display: block;"
-                  >Generated Barcode ID</span
-                >
-                <div
-                  class="calc-input"
-                  style="background-color: var(--color-surface-lowest); border-color: var(--color-outline-variant); font-family: monospace; letter-spacing: 1px; color: var(--color-primary); display: flex; align-items: center;"
-                >
-                  {generatedBarcodeID}
-                </div>
-              </div>
-
-              <div class="calc-row form-full-width">
-                <label for="entry-name-input">Product Name</label>
-                <input
-                  id="entry-name-input"
-                  type="text"
-                  class="calc-input"
-                  value={isNameDirty ? entryName : autoName}
-                  oninput={(e) => {
-                    entryName = e.target.value;
-                    isNameDirty = e.target.value.trim() !== "";
-                  }}
-                  placeholder="e.g. Celestial Gold Ring"
-                />
-              </div>
-
-              <div class="calc-row form-full-width">
-                <label for="entry-desc-textarea">Description</label>
-                <textarea
-                  id="entry-desc-textarea"
-                  class="calc-input"
-                  style="resize: vertical; min-height: 60px;"
-                  value={isDescriptionDirty ? entryDescription : autoDesc}
-                  oninput={(e) => {
-                    entryDescription = e.target.value;
-                    isDescriptionDirty = e.target.value.trim() !== "";
-                  }}
-                  placeholder="Enter item description..."
-                ></textarea>
-              </div>
-            </div>
-
-            <div
-              class="barcode-preview-card"
-              style="display: flex; flex-direction: column; align-items: center; gap: 12px; width: 100%;"
-            >
-              <span
-                style="font-size: 10px; text-transform: uppercase; color: var(--color-on-surface-variant); letter-spacing: 0.1em; margin-bottom: 4px;"
-                >Real-Time Jewelry Barcode Tag Sticker Preview</span
-              >
-              <div
-                style="display: flex; gap: 20px; width: 100%; justify-content: center;"
-              >
-                <!-- Unified Barcode Sticker -->
-                <div
-                  style="background-color: white; color: black; padding: 16px; border-radius: var(--radius-sm); border: 1px solid var(--color-outline); width: 280px; display: flex; flex-direction: column; align-items: center; justify-content: center; box-shadow: var(--shadow-sm);"
-                >
-                  <div
-                    style="font-size: 9px; font-weight: 700; text-transform: uppercase; margin-bottom: 6px; letter-spacing: 0.8px; color: black;"
-                  >
-                    Sunrise Fine Jewells
-                  </div>
-
-                  <div
-                    class="barcode-svg-container"
-                    style="background-color: transparent; padding: 0; width: 100%; height: 45px; display: flex; align-items: center; justify-content: center; overflow: hidden; margin-bottom: 6px;"
-                  >
-                    {@html barcodeData.svgContent}
-                  </div>
-
-                  <div
-                    style="display: flex; width: 100%; justify-content: space-between; font-family: monospace; font-size: 8px; color: black; border-top: 1px dashed #ccc; padding-top: 6px; margin-top: 2px;"
-                  >
-                    <div>WT: {entryWeight || "0.00"} g</div>
-                    <div>
-                      {entryPurity === "Silver"
-                        ? "Silver"
-                        : `KT: ${entryPurity} Gold`}
-                    </div>
-                    <div>ID: {generatedBarcodeID}</div>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            <button
-              type="submit"
-              class="btn btn-primary"
-              style="width: 100%; margin-top: 8px; display: flex; align-items: center; justify-content: center; gap: 8px;"
-            >
-              <span class="material-symbols-outlined" style="font-size: 16px;"
-                >add_box</span
-              >
-              Add Item to Stock
-            </button>
-
-            {#if formError}
-              <div class="alert-box alert-error" style="margin-top: 12px;">
-                <span class="material-symbols-outlined" style="font-size: 16px;"
-                  >error</span
-                >
-                {formError}
-              </div>
-            {/if}
-
-            {#if formSuccess && lastGeneratedLabel}
-              <div
-                style="margin-top: 16px; background: rgba(76,175,80,0.08); border: 1px solid rgba(76,175,80,0.3); border-radius: var(--radius-sm); padding: 16px; display: flex; flex-direction: column; align-items: center; gap: 12px;"
-              >
-                <div
-                  style="display: flex; align-items: center; gap: 8px; color: var(--color-success); font-size: 13px; font-weight: 600;"
-                >
-                  <span class="material-symbols-outlined" style="font-size: 18px;"
-                    >check_circle</span
-                  >
-                  {formSuccess}
-                </div>
-                <img
-                  src={lastGeneratedLabel.dataUri}
-                  alt="Label preview"
-                  style="max-width: 240px; border: 1px solid var(--color-outline-variant); border-radius: var(--radius-sm); background: white;"
-                />
-                <button
-                  type="button"
-                  class="btn btn-primary"
-                  style="display: flex; align-items: center; gap: 8px; padding: 10px 24px;"
-                  onclick={() =>
-                    downloadLabel(
-                      lastGeneratedLabel.dataUri,
-                      lastGeneratedLabel.id,
-                    )}
-                >
-                  <span class="material-symbols-outlined" style="font-size: 16px;"
-                    >download</span
-                  >
-                  Download Label PNG
-                </button>
-                <p
-                  style="font-size: 10px; color: var(--color-on-surface-variant); margin: 0;"
-                >
-                  Print & stick this label on the jewellery item
-                </p>
-              </div>
-            {/if}
-          </form>
-        {/if}
+            {:else}
+              <div style="text-align: center; color: #666; padding: 20px;">No log entries loaded. Start the Python feed collector to begin recording.</div>
+            {/each}
+          </div>
+        </div>
       </div>
 
-      <!-- Stock Valuation Catalog Panel -->
+      <!-- Right column: Summary + Category Breakdown -->
+      <div style="display: flex; flex-direction: column; gap: 24px;">
+        <div class="panel">
+          <h2 class="panel-title" style="margin-bottom: 16px; border-bottom: 1px solid rgba(153, 144, 124, 0.15); padding-bottom: 8px; display: flex; align-items: center; gap: 8px;">
+            <span class="material-symbols-outlined" style="color: var(--color-primary);">analytics</span>
+            Total Inventory Summary
+          </h2>
+          <div class="inventory-summary-grid">
+            <div class="summary-stat-card">
+              <span class="summary-stat-label">Total Gold Weight</span>
+              <div class="summary-stat-value">
+                {totalGoldWeight.toFixed(2)} g
+                <span class="summary-stat-subvalue">{(totalGoldWeight / 1000).toFixed(3)} kg</span>
+              </div>
+            </div>
+            <div class="summary-stat-card">
+              <span class="summary-stat-label">Total Silver Weight</span>
+              <div class="summary-stat-value">
+                {totalSilverWeight.toFixed(2)} g
+                <span class="summary-stat-subvalue">{(totalSilverWeight / 1000).toFixed(3)} kg</span>
+              </div>
+            </div>
+            <div class="summary-stat-card" style="border-color: rgba(242, 202, 80, 0.25); background: linear-gradient(180deg, var(--color-surface-lowest) 0%, rgba(242, 202, 80, 0.02) 100%);">
+              <span class="summary-stat-label" style="color: var(--color-primary);">Current Valuation</span>
+              <div class="summary-stat-value" style="color: var(--color-primary); font-size: 22px;">
+                {formatCurrency(totalStockValuation)}
+                <span class="summary-stat-subvalue" style="color: var(--color-on-surface-variant);">Full inventory sum</span>
+              </div>
+            </div>
+
+            <!-- Quick-access nav buttons -->
+            <div style="display: flex; flex-direction: column; gap: 10px; margin-top: 4px;">
+              <button class="btn btn-secondary" style="width: 100%; display: flex; align-items: center; gap: 8px; justify-content: center;" onclick={() => (activeTab = 'inventory')}>
+                <span class="material-symbols-outlined" style="font-size: 16px;">list_alt</span>
+                View Full Inventory ({products.length} items)
+              </button>
+              <button class="btn btn-secondary" style="width: 100%; display: flex; align-items: center; gap: 8px; justify-content: center;" onclick={() => (activeTab = 'invoices')}>
+                <span class="material-symbols-outlined" style="font-size: 16px;">receipt_long</span>
+                View Sales Ledger
+              </button>
+              {#if data.role === 'admin'}
+              <button class="btn btn-primary" style="width: 100%; display: flex; align-items: center; gap: 8px; justify-content: center;" onclick={() => (activeTab = 'addstock')}>
+                <span class="material-symbols-outlined" style="font-size: 16px;">add_box</span>
+                Add New Stock Item
+              </button>
+              {/if}
+            </div>
+          </div>
+        </div>
+
+        <!-- Category Breakdown -->
+        <div class="panel">
+          <h2 class="panel-title" style="margin-bottom: 14px; display: flex; align-items: center; gap: 8px; border-bottom: 1px solid rgba(153, 144, 124, 0.15); padding-bottom: 8px;">
+            <span class="material-symbols-outlined" style="color: var(--color-primary);">donut_small</span>
+            Category Breakdown
+          </h2>
+          <div style="display: flex; flex-direction: column; gap: 8px;">
+            {#each categories.filter(c => c !== 'All') as cat}
+              {@const catProducts = computedProducts.filter(p => p.category === cat)}
+              {#if catProducts.length > 0}
+              <div style="display: flex; justify-content: space-between; align-items: center; padding: 10px 12px; background: var(--color-surface-lowest); border-radius: var(--radius-sm); border: 1px solid var(--color-outline-variant); cursor: pointer; transition: var(--transition-smooth);" onclick={() => { activeCategory = cat; activeTab = 'inventory'; }}>
+                <div style="display: flex; align-items: center; gap: 8px;">
+                  <span style="font-size: 11px; font-weight: 600; color: var(--color-on-background);">{cat}</span>
+                  <span style="font-size: 10px; color: var(--color-on-surface-variant); background: rgba(154,123,62,0.1); padding: 2px 7px; border-radius: 99px;">{catProducts.length} items</span>
+                </div>
+                <span style="font-size: 13px; font-weight: 700; color: var(--color-primary);">{formatCurrency(catProducts.reduce((s,p) => s + p.totalPrice, 0))}</span>
+              </div>
+              {/if}
+            {/each}
+          </div>
+        </div>
+      </div>
+    </div>
+    {/if}
+
+    <!-- TAB 2: INVENTORY -->
+    {#if activeTab === 'inventory'}
+    <div class="tab-panel">
       <div class="panel">
         <div class="panel-header">
-          <div
-            style="display: flex; align-items: center; gap: 16px; width: 100%; justify-content: space-between; flex-wrap: wrap;"
-          >
-            <h2
-              class="panel-title"
-              style="display: flex; align-items: center; gap: 8px;"
-            >
-              <span
-                class="material-symbols-outlined"
-                style="color: var(--color-primary);">list_alt</span
-              >
+          <div style="display: flex; align-items: center; gap: 16px; width: 100%; justify-content: space-between; flex-wrap: wrap;">
+            <h2 class="panel-title" style="display: flex; align-items: center; gap: 8px;">
+              <span class="material-symbols-outlined" style="color: var(--color-primary);">list_alt</span>
               Stock Valuation Catalog
             </h2>
-
-            <!-- Category Tabs -->
-            <div
-              style="display: flex; gap: 6px; overflow-x: auto; padding: 4px 0;"
-            >
+            <div style="display: flex; gap: 6px; overflow-x: auto; padding: 4px 0;">
               {#each categories as cat}
                 <button
-                  class="btn btn-secondary btn-small {activeCategory === cat
-                    ? 'active'
-                    : ''}"
-                  style="padding: 6px 12px; font-size: 10px; border-radius: var(--radius-full); border-color: {activeCategory ===
-                  cat
-                    ? 'var(--color-primary)'
-                    : 'rgba(153, 144, 124, 0.15)'}; color: {activeCategory ===
-                  cat
-                    ? 'var(--color-primary)'
-                    : ''};"
+                  class="btn btn-secondary btn-small {activeCategory === cat ? 'active' : ''}"
+                  style="padding: 6px 12px; font-size: 10px; border-radius: var(--radius-full); border-color: {activeCategory === cat ? 'var(--color-primary)' : 'rgba(153, 144, 124, 0.15)'}; color: {activeCategory === cat ? 'var(--color-primary)' : ''};"
                   onclick={() => (activeCategory = cat)}
                 >
                   {cat === "All" ? "All Items" : cat}
@@ -1292,40 +1300,17 @@
           </div>
         </div>
 
-        <!-- Search Input & Scanner trigger -->
-        <div
-          style="display: flex; gap: 10px; margin-bottom: 20px; align-items: center;"
-        >
+        <div style="display: flex; gap: 10px; margin-bottom: 20px; align-items: center;">
           <div style="position: relative; flex: 1;">
-            <input
-              class="calc-input"
-              style="padding-left: 36px; width: 100%; box-sizing: border-box;"
-              type="text"
-              bind:value={searchQuery}
-              placeholder="Search by ID or product name..."
-              aria-label="Search stock"
-            />
-            <span
-              class="material-symbols-outlined"
-              style="position: absolute; left: 10px; top: 10px; font-size: 18px; color: var(--color-on-surface-variant); opacity: 0.6;"
-              >search</span
-            >
+            <input class="calc-input" style="padding-left: 36px; width: 100%; box-sizing: border-box;" type="text" bind:value={searchQuery} placeholder="Search by ID or product name..." aria-label="Search stock" />
+            <span class="material-symbols-outlined" style="position: absolute; left: 10px; top: 10px; font-size: 18px; color: var(--color-on-surface-variant); opacity: 0.6;">search</span>
           </div>
-
-          <button
-            type="button"
-            class="btn btn-secondary"
-            style="display: flex; align-items: center; gap: 6px; padding: 10px 16px; flex-shrink: 0;"
-            onclick={startScanner}
-          >
-            <span class="material-symbols-outlined" style="font-size: 18px;"
-              >photo_camera</span
-            >
+          <button type="button" class="btn btn-secondary" style="display: flex; align-items: center; gap: 6px; padding: 10px 16px; flex-shrink: 0;" onclick={startScanner}>
+            <span class="material-symbols-outlined" style="font-size: 18px;">photo_camera</span>
             Scan Tag
           </button>
         </div>
 
-        <!-- Inventory Table -->
         <div class="table-responsive">
           <table class="data-table">
             <thead>
@@ -1347,74 +1332,35 @@
                 <tr>
                   <td><span class="id-badge">{product.id}</span></td>
                   <td>
-                    <div
-                      style="width: 100px; height: 35px; background: white; padding: 2px; border-radius: var(--radius-sm); border: 1px solid var(--color-outline-variant); overflow: hidden; display: flex; align-items: center; justify-content: center;"
-                      title="Barcode Label"
-                    >
+                    <div style="width: 100px; height: 35px; background: white; padding: 2px; border-radius: var(--radius-sm); border: 1px solid var(--color-outline-variant); overflow: hidden; display: flex; align-items: center; justify-content: center;" title="Barcode Label">
                       {@html generateCode39SVG(product.id).svgContent}
                     </div>
                   </td>
                   <td>
-                    <div
-                      style="font-weight: 600; color: var(--color-on-background);"
-                    >
-                      {product.name}
-                    </div>
-                    <div
-                      style="font-size: 10px; color: var(--color-on-surface-variant);"
-                    >
-                      {product.category}
-                    </div>
+                    <div style="font-weight: 600; color: var(--color-on-background);">{product.name}</div>
+                    <div style="font-size: 10px; color: var(--color-on-surface-variant);">{product.category}</div>
                   </td>
                   <td>{product.purity}</td>
                   <td>{product.weight} g</td>
                   <td>{formatCurrency(product.metalValue)}</td>
                   <td>
                     {formatCurrency(product.makingCharges)}
-                    <div
-                      style="font-size: 9px; color: var(--color-on-surface-variant); opacity: 0.8;"
-                    >
-                      ({Math.round(product.makingCharge * 100)}%)
-                    </div>
+                    <div style="font-size: 9px; color: var(--color-on-surface-variant); opacity: 0.8;">({Math.round(product.makingCharge * 100)}%)</div>
                   </td>
                   <td>{formatCurrency(product.gst)}</td>
-                  <td
-                    ><span class="price-val"
-                      >{formatCurrency(product.totalPrice)}</span
-                    ></td
-                  >
+                  <td><span class="price-val">{formatCurrency(product.totalPrice)}</span></td>
                   <td>
                     <div style="display: flex; gap: 6px; flex-wrap: wrap;">
-                      <button
-                        class="btn btn-primary btn-small"
-                        style="padding: 6px 10px; font-size: 10px; display: flex; align-items: center; gap: 4px;"
-                        onclick={() => addToBag(product)}
-                      >
-                        <span
-                          class="material-symbols-outlined"
-                          style="font-size: 12px;">shopping_cart</span
-                        >
+                      <button class="btn btn-primary btn-small" style="padding: 6px 10px; font-size: 10px; display: flex; align-items: center; gap: 4px;" onclick={() => addToBag(product)}>
+                        <span class="material-symbols-outlined" style="font-size: 12px;">shopping_cart</span>
                         Sell
                       </button>
-                      <button
-                        class="btn btn-secondary btn-small"
-                        style="padding: 6px 12px; font-size: 10px;"
-                        onclick={() => openBreakdown(product)}
-                      >
+                      <button class="btn btn-secondary btn-small" style="padding: 6px 12px; font-size: 10px;" onclick={() => openBreakdown(product)}>
                         Full Audit
                       </button>
                       {#if product.image && product.image.startsWith("data:image")}
-                        <button
-                          class="btn btn-secondary btn-small"
-                          style="padding: 6px 10px; font-size: 10px; display: flex; align-items: center; gap: 4px; border-color: rgba(242,202,80,0.3); color: var(--color-primary);"
-                          title="Download label for printing"
-                          onclick={() =>
-                            downloadLabel(product.image, product.id)}
-                        >
-                          <span
-                            class="material-symbols-outlined"
-                            style="font-size: 13px;">download</span
-                          >
+                        <button class="btn btn-secondary btn-small" style="padding: 6px 10px; font-size: 10px; display: flex; align-items: center; gap: 4px; border-color: rgba(242,202,80,0.3); color: var(--color-primary);" title="Download label for printing" onclick={() => downloadLabel(product.image, product.id)}>
+                          <span class="material-symbols-outlined" style="font-size: 13px;">download</span>
                           Label
                         </button>
                       {/if}
@@ -1423,116 +1369,182 @@
                 </tr>
               {:else}
                 <tr>
-                  <td
-                    colspan="10"
-                    style="text-align: center; padding: 32px; color: var(--color-on-surface-variant);"
-                  >
-                    No items found in stock inventory matching your filters.
-                  </td>
+                  <td colspan="10" style="text-align: center; padding: 32px; color: var(--color-on-surface-variant);">No items found in stock inventory matching your filters.</td>
                 </tr>
               {/each}
             </tbody>
           </table>
         </div>
       </div>
+    </div>
+    {/if}
 
-      <!-- Manager Sales Ledger Panel -->
+    <!-- TAB 3: ADD STOCK -->
+    {#if activeTab === 'addstock'}
+    <div class="tab-panel addstock-layout">
       <div class="panel">
-        <h2
-          class="panel-title"
-          style="margin-bottom: 16px; border-bottom: 1px solid rgba(153, 144, 124, 0.15); padding-bottom: 8px; display: flex; align-items: center; justify-content: space-between;"
-        >
+        <h2 class="panel-title" style="margin-bottom: 16px; border-bottom: 1px solid rgba(153, 144, 124, 0.15); padding-bottom: 8px; display: flex; align-items: center; gap: 8px;">
+          <span class="material-symbols-outlined" style="color: var(--color-primary);">inventory_2</span>
+          Merchant Stock Entry
+        </h2>
+
+        {#if data.role !== 'admin'}
+          <div class="alert-box alert-error" style="background: rgba(185, 28, 28, 0.05); border-color: rgba(185, 28, 28, 0.15); display: flex; flex-direction: column; align-items: center; text-align: center; padding: 32px 24px; gap: 12px; margin-top: 8px;">
+            <span class="material-symbols-outlined" style="font-size: 44px; color: var(--color-error);">lock</span>
+            <div style="font-weight: 600; color: var(--color-on-surface); font-size: 15px;">Access Restricted</div>
+            <p style="font-size: 12px; color: var(--color-on-surface-variant); margin: 0; line-height: 1.6; max-width: 300px;">You are signed in as a standard user. Stock additions and modifications are restricted to store administrators.</p>
+          </div>
+        {:else}
+          {#if formError}
+            <div class="alert-box alert-error">
+              <span class="material-symbols-outlined" style="font-size: 18px;">error</span>
+              <span>{formError}</span>
+            </div>
+          {/if}
+          {#if formSuccess}
+            <div class="alert-box alert-success">
+              <span class="material-symbols-outlined" style="font-size: 18px;">check_circle</span>
+              <span>{formSuccess}</span>
+            </div>
+          {/if}
+
+          <form onsubmit={addStockItem} class="calc-form">
+            <div class="entry-form-grid">
+              <div class="calc-row">
+                <label for="entry-category-select">Product Category</label>
+                <select id="entry-category-select" class="select-input" bind:value={entryCategory}>
+                  <option value="Ring">Ring</option>
+                  <option value="Necklace">Necklace</option>
+                  <option value="Bracelet">Bracelet</option>
+                  <option value="Earrings">Earrings</option>
+                  <option value="Watch">Watch</option>
+                </select>
+              </div>
+              <div class="calc-row">
+                <label for="entry-purity-select">Quality / Purity</label>
+                <select id="entry-purity-select" class="select-input" bind:value={entryPurity}>
+                  <option value="24K">24K Gold (99.9%)</option>
+                  <option value="22K">22K Gold (91.6%)</option>
+                  <option value="18K">18K Gold (75.0%)</option>
+                  <option value="Silver">Silver (99.9%)</option>
+                </select>
+              </div>
+              <div class="calc-row">
+                <label for="entry-weight-input">Weight (grams)</label>
+                <input id="entry-weight-input" class="calc-input" type="number" step="0.001" min="0.001" bind:value={entryWeight} placeholder="0.00" required />
+              </div>
+              <div class="calc-row">
+                <label for="entry-making-input">Making Charges (%)</label>
+                <input id="entry-making-input" class="calc-input" type="number" step="0.1" min="0" bind:value={entryMakingCharge} placeholder="12.0" required />
+              </div>
+              <div class="calc-row">
+                <label for="entry-fixed-input">Gem/Accents Value (₹)</label>
+                <input id="entry-fixed-input" class="calc-input" type="number" min="0" bind:value={entryFixedValue} placeholder="0" />
+              </div>
+              <div class="calc-row">
+                <span style="font-size: 11px; font-weight: 600; text-transform: uppercase; color: var(--color-on-surface-variant); letter-spacing: 0.05em; margin-bottom: 6px; display: block;">Generated Barcode ID</span>
+                <div class="calc-input" style="background-color: var(--color-surface-lowest); border-color: var(--color-outline-variant); font-family: monospace; letter-spacing: 1px; color: var(--color-primary); display: flex; align-items: center;">
+                  {generatedBarcodeID}
+                </div>
+              </div>
+              <div class="calc-row form-full-width">
+                <label for="entry-name-input">Product Name</label>
+                <input id="entry-name-input" type="text" class="calc-input" value={isNameDirty ? entryName : autoName} oninput={(e) => { entryName = e.target.value; isNameDirty = e.target.value.trim() !== ""; }} placeholder="e.g. Celestial Gold Ring" />
+              </div>
+              <div class="calc-row form-full-width">
+                <label for="entry-desc-textarea">Description</label>
+                <textarea id="entry-desc-textarea" class="calc-input" style="resize: vertical; min-height: 60px;" value={isDescriptionDirty ? entryDescription : autoDesc} oninput={(e) => { entryDescription = e.target.value; isDescriptionDirty = e.target.value.trim() !== ""; }} placeholder="Enter item description..."></textarea>
+              </div>
+            </div>
+
+            <div class="barcode-preview-card" style="display: flex; flex-direction: column; align-items: center; gap: 12px; width: 100%;">
+              <span style="font-size: 10px; text-transform: uppercase; color: var(--color-on-surface-variant); letter-spacing: 0.1em; margin-bottom: 4px;">Real-Time Jewelry Barcode Tag Sticker Preview</span>
+              <div style="display: flex; gap: 20px; width: 100%; justify-content: center;">
+                <div style="background-color: white; color: black; padding: 16px; border-radius: var(--radius-sm); border: 1px solid var(--color-outline); width: 280px; display: flex; flex-direction: column; align-items: center; justify-content: center; box-shadow: var(--shadow-sm);">
+                  <div style="font-size: 9px; font-weight: 700; text-transform: uppercase; margin-bottom: 6px; letter-spacing: 0.8px; color: black;">Sunrise Fine Jewells</div>
+                  <div class="barcode-svg-container" style="background-color: transparent; padding: 0; width: 100%; height: 45px; display: flex; align-items: center; justify-content: center; overflow: hidden; margin-bottom: 6px;">
+                    {@html barcodeData.svgContent}
+                  </div>
+                  <div style="display: flex; width: 100%; justify-content: space-between; font-family: monospace; font-size: 8px; color: black; border-top: 1px dashed #ccc; padding-top: 6px; margin-top: 2px;">
+                    <div>WT: {entryWeight || "0.00"} g</div>
+                    <div>{entryPurity === "Silver" ? "Silver" : `KT: ${entryPurity} Gold`}</div>
+                    <div>ID: {generatedBarcodeID}</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <button type="submit" class="btn btn-primary" style="width: 100%; margin-top: 8px; display: flex; align-items: center; justify-content: center; gap: 8px;">
+              <span class="material-symbols-outlined" style="font-size: 16px;">add_box</span>
+              Add Item to Stock
+            </button>
+
+            {#if formError}
+              <div class="alert-box alert-error" style="margin-top: 12px;">
+                <span class="material-symbols-outlined" style="font-size: 16px;">error</span>
+                {formError}
+              </div>
+            {/if}
+
+            {#if formSuccess && lastGeneratedLabel}
+              <div style="margin-top: 16px; background: rgba(76,175,80,0.08); border: 1px solid rgba(76,175,80,0.3); border-radius: var(--radius-sm); padding: 16px; display: flex; flex-direction: column; align-items: center; gap: 12px;">
+                <div style="display: flex; align-items: center; gap: 8px; color: var(--color-success); font-size: 13px; font-weight: 600;">
+                  <span class="material-symbols-outlined" style="font-size: 18px;">check_circle</span>
+                  {formSuccess}
+                </div>
+                <img src={lastGeneratedLabel.dataUri} alt="Label preview" style="max-width: 240px; border: 1px solid var(--color-outline-variant); border-radius: var(--radius-sm); background: white;" />
+                <button type="button" class="btn btn-primary" style="display: flex; align-items: center; gap: 8px; padding: 10px 24px;" onclick={() => downloadLabel(lastGeneratedLabel.dataUri, lastGeneratedLabel.id)}>
+                  <span class="material-symbols-outlined" style="font-size: 16px;">download</span>
+                  Download Label PNG
+                </button>
+                <p style="font-size: 10px; color: var(--color-on-surface-variant); margin: 0;">Print & stick this label on the jewellery item</p>
+              </div>
+            {/if}
+          </form>
+        {/if}
+      </div>
+    </div>
+    {/if}
+
+    <!-- TAB 4: INVOICES -->
+    {#if activeTab === 'invoices'}
+    <div class="tab-panel">
+      <div class="panel">
+        <h2 class="panel-title" style="margin-bottom: 16px; border-bottom: 1px solid rgba(153, 144, 124, 0.15); padding-bottom: 8px; display: flex; align-items: center; justify-content: space-between;">
           <span style="display: flex; align-items: center; gap: 8px;">
-            <span
-              class="material-symbols-outlined"
-              style="color: var(--color-primary);">receipt_long</span
-            >
+            <span class="material-symbols-outlined" style="color: var(--color-primary);">receipt_long</span>
             Manager Sales Ledger & Invoices
           </span>
-          <button
-            type="button"
-            class="btn btn-secondary btn-small"
-            onclick={fetchSalesLedger}
-            disabled={ledgerLoading}
-            style="padding: 6px 12px; font-size: 11px;"
-          >
+          <button type="button" class="btn btn-secondary btn-small" onclick={fetchSalesLedger} disabled={ledgerLoading} style="padding: 6px 12px; font-size: 11px;">
             {ledgerLoading ? "Refreshing..." : "Refresh Ledger"}
           </button>
         </h2>
 
         <!-- Ledger Filters Grid -->
-        <div
-          class="entry-form-grid"
-          style="background: var(--color-surface-lowest); border: 1px solid var(--color-outline-variant); padding: 16px; border-radius: var(--radius-sm); margin-bottom: 20px;"
-        >
+        <div class="entry-form-grid" style="background: var(--color-surface-lowest); border: 1px solid var(--color-outline-variant); padding: 16px; border-radius: var(--radius-sm); margin-bottom: 20px;">
           <div class="calc-row">
             <label for="filter-cust-name">Customer Name</label>
-            <input
-              id="filter-cust-name"
-              type="text"
-              class="calc-input"
-              placeholder="All Customers"
-              bind:value={filterCustomerName}
-              oninput={fetchSalesLedger}
-            />
+            <input id="filter-cust-name" type="text" class="calc-input" placeholder="All Customers" bind:value={filterCustomerName} oninput={fetchSalesLedger} />
           </div>
-
           <div class="calc-row">
             <label for="filter-cust-phone">Contact Number</label>
-            <input
-              id="filter-cust-phone"
-              type="text"
-              class="calc-input"
-              placeholder="All Phones"
-              bind:value={filterCustomerPhone}
-              oninput={fetchSalesLedger}
-            />
+            <input id="filter-cust-phone" type="text" class="calc-input" placeholder="All Phones" bind:value={filterCustomerPhone} oninput={fetchSalesLedger} />
           </div>
-
           <div class="calc-row">
             <label for="filter-start-date">Start Date</label>
-            <input
-              id="filter-start-date"
-              type="date"
-              class="calc-input"
-              bind:value={filterStartDate}
-              onchange={fetchSalesLedger}
-            />
+            <input id="filter-start-date" type="date" class="calc-input" bind:value={filterStartDate} onchange={fetchSalesLedger} />
           </div>
-
           <div class="calc-row">
             <label for="filter-end-date">End Date</label>
-            <input
-              id="filter-end-date"
-              type="date"
-              class="calc-input"
-              bind:value={filterEndDate}
-              onchange={fetchSalesLedger}
-            />
+            <input id="filter-end-date" type="date" class="calc-input" bind:value={filterEndDate} onchange={fetchSalesLedger} />
           </div>
-
           <div class="calc-row">
             <label for="filter-min-amt">Min Amount (₹)</label>
-            <input
-              id="filter-min-amt"
-              type="number"
-              class="calc-input"
-              placeholder="Min ₹"
-              bind:value={filterMinAmount}
-              oninput={fetchSalesLedger}
-            />
+            <input id="filter-min-amt" type="number" class="calc-input" placeholder="Min ₹" bind:value={filterMinAmount} oninput={fetchSalesLedger} />
           </div>
-
           <div class="calc-row">
             <label for="filter-max-amt">Max Amount (₹)</label>
-            <input
-              id="filter-max-amt"
-              type="number"
-              class="calc-input"
-              placeholder="Max ₹"
-              bind:value={filterMaxAmount}
-              oninput={fetchSalesLedger}
-            />
+            <input id="filter-max-amt" type="number" class="calc-input" placeholder="Max ₹" bind:value={filterMaxAmount} oninput={fetchSalesLedger} />
           </div>
         </div>
 
@@ -1553,50 +1565,23 @@
             <tbody>
               {#each ledgerInvoices as invoice (invoice.invoiceId || invoice._id)}
                 <tr>
-                  <td
-                    ><span class="id-badge" style="font-family: monospace;"
-                      >{invoice.invoiceId}</span
-                    ></td
-                  >
-                  <td style="font-size: 11px;"
-                    >{new Date(
-                      invoice.createdAt || invoice.date,
-                    ).toLocaleString()}</td
-                  >
+                  <td><span class="id-badge" style="font-family: monospace;">{invoice.invoiceId}</span></td>
+                  <td style="font-size: 11px;">{new Date(invoice.createdAt || invoice.date).toLocaleString()}</td>
                   <td><strong>{invoice.customerName}</strong></td>
                   <td>{invoice.customerPhone || "N/A"}</td>
                   <td>{Number(invoice.totalWeight || 0).toFixed(2)} g</td>
-                  <td
-                    ><span
-                      class="price-val"
-                      style="color: var(--color-primary);"
-                      >{formatCurrency(invoice.total)}</span
-                    ></td
-                  >
+                  <td><span class="price-val" style="color: var(--color-primary);">{formatCurrency(invoice.total)}</span></td>
                   <td>
-                    <button
-                      type="button"
-                      class="btn btn-secondary btn-small"
-                      style="display: flex; align-items: center; gap: 4px; padding: 6px 10px;"
-                      onclick={() => reprintInvoice(invoice)}
-                    >
-                      <span
-                        class="material-symbols-outlined"
-                        style="font-size: 14px;">print</span
-                      >
+                    <button type="button" class="btn btn-secondary btn-small" style="display: flex; align-items: center; gap: 4px; padding: 6px 10px;" onclick={() => reprintInvoice(invoice)}>
+                      <span class="material-symbols-outlined" style="font-size: 14px;">print</span>
                       Reprint
                     </button>
                   </td>
                 </tr>
               {:else}
                 <tr>
-                  <td
-                    colspan="7"
-                    style="text-align: center; padding: 32px; color: var(--color-on-surface-variant);"
-                  >
-                    {ledgerLoading
-                      ? "Loading invoices..."
-                      : "No invoices found matching current filters."}
+                  <td colspan="7" style="text-align: center; padding: 32px; color: var(--color-on-surface-variant);">
+                    {ledgerLoading ? "Loading invoices..." : "No invoices found matching current filters."}
                   </td>
                 </tr>
               {/each}
@@ -1605,292 +1590,77 @@
         </div>
       </div>
     </div>
+    {/if}
 
-    <!-- Right Column: Sidebar (Rates, Totals, Calculator, Logs) -->
-    <div style="display: flex; flex-direction: column; gap: 24px;">
-      <!-- Unified Live Bullion Rates Panel -->
+    <!-- TAB 5: RESALE -->
+    {#if activeTab === 'resale'}
+    <div class="tab-panel addstock-layout">
       <div class="panel">
-        <h2
-          class="panel-title"
-          style="margin-bottom: 12px; display: flex; align-items: center; justify-content: space-between;"
-        >
-          <span style="display: flex; align-items: center; gap: 6px;">
-            <span
-              class="indicator-dot {isOverride ? 'override' : connectionStatus}"
-            ></span>
-            Live Bullion Rates
-          </span>
-          <span
-            style="font-size: 10px; font-weight: normal; color: var(--color-on-surface-variant); font-family: monospace;"
-          >
-            {timestamp ? timestamp : "Connecting..."}
-          </span>
+        <h2 class="panel-title" style="margin-bottom: 16px; border-bottom: 1px solid rgba(153, 144, 124, 0.15); padding-bottom: 8px; display: flex; align-items: center; gap: 8px;">
+          <span class="material-symbols-outlined" style="color: var(--color-primary);">currency_exchange</span>
+          Old Gold & Silver Resale / Exchange
         </h2>
 
-        <div
-          style="display: flex; flex-direction: column; gap: 4px; margin-bottom: 16px;"
-        >
-          <div class="sidebar-rate-row">
-            <div class="rate-row-left">
-              <span
-                class="rate-purity-badge badge-gold"
-                style="background-color: rgba(242, 202, 80, 0.15);"
-                >24K Gold</span
-              >
-              <span
-                style="font-size: 12px; color: var(--color-on-surface-variant);"
-                >99.9% Purity</span
-              >
+        <form onsubmit={addToResaleCart} class="calc-form">
+          <div class="entry-form-grid">
+            <div class="calc-row">
+              <label for="resale-metal-select">Metal Type</label>
+              <select id="resale-metal-select" class="select-input" bind:value={resaleMetal}>
+                <option value="Gold">Gold</option>
+                <option value="Silver">Silver</option>
+              </select>
             </div>
-            <span class="rate-value-display"
-              >{formatCurrency(activeGold24k)}</span
-            >
-          </div>
-
-          <div class="sidebar-rate-row">
-            <div class="rate-row-left">
-              <span
-                class="rate-purity-badge badge-gold"
-                style="background-color: rgba(242, 202, 80, 0.1);"
-                >22K Gold</span
-              >
-              <span
-                style="font-size: 12px; color: var(--color-on-surface-variant);"
-                >91.6% Purity</span
-              >
+            <div class="calc-row">
+              <label for="resale-purity-select">Quality / Purity</label>
+              <select id="resale-purity-select" class="select-input" bind:value={resalePurity}>
+                {#if resaleMetal === "Gold"}
+                  <option value="24K">24K (99.9%)</option>
+                  <option value="22K">22K (91.6%)</option>
+                  <option value="18K">18K (75.0%)</option>
+                {:else}
+                  <option value="Silver">Silver (99.9%)</option>
+                {/if}
+              </select>
             </div>
-            <span class="rate-value-display"
-              >{formatCurrency(activeGold22k)}</span
-            >
-          </div>
-
-          <div class="sidebar-rate-row">
-            <div class="rate-row-left">
-              <span
-                class="rate-purity-badge badge-gold"
-                style="background-color: rgba(242, 202, 80, 0.05);"
-                >18K Gold</span
-              >
-              <span
-                style="font-size: 12px; color: var(--color-on-surface-variant);"
-                >75.0% Purity</span
-              >
+            <div class="calc-row">
+              <label for="resale-weight-input">Weight (grams)</label>
+              <input id="resale-weight-input" class="calc-input" type="number" step="0.001" min="0.001" bind:value={resaleWeight} placeholder="0.00" required />
             </div>
-            <span class="rate-value-display"
-              >{formatCurrency(activeGold18k)}</span
-            >
-          </div>
-
-          <div class="sidebar-rate-row">
-            <div class="rate-row-left">
-              <span
-                class="rate-purity-badge badge-gold"
-                style="background-color: rgba(215, 196, 164, 0.1); color: var(--color-secondary); border-color: rgba(215, 196, 164, 0.2);"
-                >Silver</span
-              >
-              <span
-                style="font-size: 12px; color: var(--color-on-surface-variant);"
-                >99.9% Pure</span
-              >
+            <div class="calc-row">
+              <label for="resale-deduction-input">Deductions (₹)</label>
+              <input id="resale-deduction-input" class="calc-input" type="number" step="0.01" min="0" bind:value={resaleDeduction} placeholder="0.00 (e.g. melting loss)" />
             </div>
-            <span class="rate-value-display">₹{activeSilver}</span>
-          </div>
-        </div>
-
-        <!-- Rate Override Control Inside Bullion Panel -->
-        {#if data.role === 'admin'}
-          <div
-            style="border-top: 1px solid rgba(153, 144, 124, 0.15); padding-top: 16px;"
-          >
-            <div
-              class="control-group"
-              style="justify-content: space-between; width: 100%; margin-bottom: 12px;"
-            >
-              <span class="control-label" style="font-size: 11px;"
-                >Manual Override</span
-              >
-              <label
-                class="switch-container"
-                aria-label="Toggle Manual Rate Override"
-              >
-                <input
-                  class="switch-input"
-                  type="checkbox"
-                  bind:checked={isOverride}
-                />
-                <span class="switch-slider"></span>
-              </label>
-            </div>
-
-            {#if isOverride}
-              <div
-                class="override-inputs"
-                style="flex-direction: column; align-items: stretch; gap: 12px; width: 100%;"
-              >
-                <div class="override-field">
-                  <label for="gold-override-input">Override Gold 24K (₹/1g)</label
-                  >
-                  <input
-                    id="gold-override-input"
-                    class="input-number"
-                    style="width: 100%;"
-                    type="number"
-                    bind:value={customGold24k}
-                    min="5000"
-                    max="30000"
-                  />
-                </div>
-                <div class="override-field">
-                  <label for="silver-override-input">Override Silver (₹/1g)</label
-                  >
-                  <input
-                    id="silver-override-input"
-                    class="input-number"
-                    style="width: 100%;"
-                    type="number"
-                    bind:value={customSilver}
-                    step="0.1"
-                    min="100"
-                    max="500"
-                  />
-                </div>
-                <button
-                  class="btn btn-primary btn-small"
-                  onclick={() => {
-                    customGold24k = gold24k;
-                    customSilver = silver;
-                  }}
-                  style="width: 100%; padding: 8px 16px;"
-                >
-                  Sync to Live
-                </button>
+            
+            <!-- Summary calculation for this item -->
+            <div class="calc-row form-full-width" style="background: var(--color-surface-lowest); border: 1px dashed var(--color-primary); padding: 16px; border-radius: var(--radius-sm); margin-top: 8px;">
+              <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                <span style="font-size: 11px; font-weight: 600; text-transform: uppercase; color: var(--color-on-surface-variant); letter-spacing: 0.05em;">Current Rate ({resalePurity})</span>
+                <span style="font-family: monospace; font-size: 14px; font-weight: bold;">{formatCurrency(activeResaleRate)}/g</span>
               </div>
-            {:else}
-              <div
-                style="font-size: 11px; color: var(--color-on-surface-variant); display: flex; align-items: flex-start; gap: 6px; line-height: 1.4;"
-              >
-                <span
-                  class="material-symbols-outlined"
-                  style="font-size: 14px; color: var(--color-primary); flex-shrink: 0; margin-top: 1px;"
-                  >info</span
-                >
-                Valuations dynamically update from live spot rates. Toggle switch to
-                override rates.
+              <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                <span style="font-size: 11px; font-weight: 600; text-transform: uppercase; color: var(--color-on-surface-variant); letter-spacing: 0.05em;">Gross Value</span>
+                <span style="font-family: monospace; font-size: 14px; color: var(--color-on-background);">{formatCurrency((Number(resaleWeight) || 0) * activeResaleRate)}</span>
               </div>
-            {/if}
-          </div>
-        {:else}
-          <div
-            style="border-top: 1px solid rgba(153, 144, 124, 0.15); padding-top: 16px; font-size: 11px; color: var(--color-on-surface-variant); display: flex; align-items: flex-start; gap: 6px; line-height: 1.4;"
-          >
-            <span
-              class="material-symbols-outlined"
-              style="font-size: 14px; color: var(--color-primary); flex-shrink: 0; margin-top: 1px;"
-              >info</span
-            >
-            Spot rates are automatically fetched from market live feed. Rate override is restricted to administrators.
-          </div>
-        {/if}
-      </div>
-
-      <!-- Enhanced Total Inventory Summary Panel -->
-      <div class="panel">
-        <h2
-          class="panel-title"
-          style="margin-bottom: 16px; border-bottom: 1px solid rgba(153, 144, 124, 0.15); padding-bottom: 8px; display: flex; align-items: center; gap: 8px;"
-        >
-          <span
-            class="material-symbols-outlined"
-            style="color: var(--color-primary);">analytics</span
-          >
-          Total Inventory Summary
-        </h2>
-
-        <div class="inventory-summary-grid">
-          <div class="summary-stat-card">
-            <span class="summary-stat-label">Total Gold Weight</span>
-            <div class="summary-stat-value">
-              {totalGoldWeight.toFixed(2)} g
-              <span class="summary-stat-subvalue"
-                >{(totalGoldWeight / 1000).toFixed(3)} kg</span
-              >
+              <div style="display: flex; justify-content: space-between; align-items: center; border-top: 1px solid rgba(153, 144, 124, 0.2); padding-top: 12px; margin-top: 4px;">
+                <span style="font-size: 13px; font-weight: 700; color: var(--color-primary);">Net Resale Value</span>
+                <span style="font-size: 20px; font-weight: bold; color: var(--color-primary);">{formatCurrency(resaleComputedValue)}</span>
+              </div>
             </div>
           </div>
 
-          <div class="summary-stat-card">
-            <span class="summary-stat-label">Total Silver Weight</span>
-            <div class="summary-stat-value">
-              {totalSilverWeight.toFixed(2)} g
-              <span class="summary-stat-subvalue"
-                >{(totalSilverWeight / 1000).toFixed(3)} kg</span
-              >
-            </div>
-          </div>
-
-          <div
-            class="summary-stat-card"
-            style="border-color: rgba(242, 202, 80, 0.25); background: linear-gradient(180deg, var(--color-surface-lowest) 0%, rgba(242, 202, 80, 0.02) 100%);"
-          >
-            <span
-              class="summary-stat-label"
-              style="color: var(--color-primary);">Current Valuation</span
-            >
-            <div
-              class="summary-stat-value"
-              style="color: var(--color-primary); font-size: 22px;"
-            >
-              {formatCurrency(totalStockValuation)}
-              <span
-                class="summary-stat-subvalue"
-                style="color: var(--color-on-surface-variant);"
-                >Full inventory sum</span
-              >
-            </div>
-          </div>
-        </div>
-      </div>
-
-
-      <!-- Live Bullion Logs Console Auditor -->
-      <div class="panel">
-        <h2
-          class="panel-title"
-          style="margin-bottom: 12px; display: flex; align-items: center; justify-content: space-between;"
-        >
-          <span style="display: flex; align-items: center; gap: 6px;">
-            <span
-              class="material-symbols-outlined"
-              style="color: var(--color-primary); font-size: 18px;"
-              >terminal</span
-            >
-            Recent Live Feed Ticks
-          </span>
-          <span
-            style="font-size: 9px; font-family: monospace; color: var(--color-on-surface-variant); font-weight: normal;"
-            >Live Feed Tracker</span
-          >
-        </h2>
-
-        <div class="console-container">
-          {#each auditLogs as log}
-            <div class="console-row">
-              <span class="console-time"
-                >{log.timestamp.split(" ")[1] || log.timestamp}</span
-              >
-              <span class="console-symbol">{log.symbol}</span>
-              <span class="console-rate">Ask: ₹{log.ask.toLocaleString()}</span>
-            </div>
-          {:else}
-            <div style="text-align: center; color: #666; padding: 20px;">
-              No log entries loaded. Start the Python feed collector to begin
-              recording.
-            </div>
-          {/each}
-        </div>
+          <button type="submit" class="btn btn-primary" style="width: 100%; margin-top: 16px; display: flex; align-items: center; justify-content: center; gap: 8px;">
+            <span class="material-symbols-outlined" style="font-size: 16px;">add_shopping_cart</span>
+            Add to Resale/Exchange Cart
+          </button>
+        </form>
       </div>
     </div>
-  </div>
-</div>
+    {/if}
+
+  </div><!-- end tab-content -->
+</div><!-- end dashboard-container -->
+
+
 
 <!-- Detailed Price Audit Modal -->
 {#if showModal && selectedProduct}
@@ -2201,7 +1971,7 @@
       </div>
 
       <div class="cart-body">
-        {#if cart.length === 0}
+        {#if cart.length === 0 && resaleCart.length === 0}
           <div
             style="display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100%; color: var(--color-on-surface-variant); opacity: 0.6; gap: 12px;"
           >
@@ -2212,61 +1982,95 @@
               Your cart is empty
             </p>
             <p style="margin: 0; font-size: 11px; text-align: center;">
-              Scan a tag or click 'Sell' in the catalog to add items.
+              Add purchases from inventory, or old items from Resale tab.
             </p>
           </div>
         {:else}
-          {#each cart as item (item._id || item.id)}
-            <div class="cart-item">
-              <div class="cart-item-info">
-                <span class="cart-item-name">{item.name}</span>
-                <span class="cart-item-specs"
-                  >ID: {item.id} • {item.purity} • {item.weight}g</span
-                >
-              </div>
-              <div style="display: flex; align-items: center; gap: 8px;">
-                <span class="cart-item-price"
-                  >{formatCurrency(item.totalPrice)}</span
-                >
-                <button
-                  class="cart-item-remove"
-                  onclick={() => removeFromCart(item.id)}
-                  aria-label="Remove item"
-                >
-                  <span
-                    class="material-symbols-outlined"
-                    style="font-size: 18px;">delete</span
-                  >
-                </button>
-              </div>
+          {#if cart.length > 0}
+            <div style="font-size: 12px; font-weight: 700; text-transform: uppercase; color: var(--color-primary); padding: 8px 16px; background: rgba(154, 123, 62, 0.05); margin-bottom: 8px; border-bottom: 1px solid var(--color-outline-variant);">
+              Purchases (New Items)
             </div>
-          {/each}
+            {#each cart as item (item._id || item.id)}
+              <div class="cart-item">
+                <div class="cart-item-info">
+                  <span class="cart-item-name">{item.name}</span>
+                  <span class="cart-item-specs"
+                    >ID: {item.id} • {item.purity} • {item.weight}g</span
+                  >
+                </div>
+                <div style="display: flex; align-items: center; gap: 8px;">
+                  <span class="cart-item-price"
+                    >{formatCurrency(item.totalPrice)}</span
+                  >
+                  <button
+                    class="cart-item-remove"
+                    onclick={() => removeFromCart(item.id)}
+                    aria-label="Remove item"
+                  >
+                    <span
+                      class="material-symbols-outlined"
+                      style="font-size: 18px;">delete</span
+                    >
+                  </button>
+                </div>
+              </div>
+            {/each}
+          {/if}
+
+          {#if resaleCart.length > 0}
+            <div style="font-size: 12px; font-weight: 700; text-transform: uppercase; color: #10b981; padding: 8px 16px; background: rgba(16, 185, 129, 0.05); margin-top: 12px; margin-bottom: 8px; border-bottom: 1px solid rgba(16, 185, 129, 0.2);">
+              Received Items (Old Gold/Silver)
+            </div>
+            {#each resaleCart as item (item.id)}
+              <div class="cart-item" style="border-left: 3px solid #10b981;">
+                <div class="cart-item-info">
+                  <span class="cart-item-name">{item.name}</span>
+                  <span class="cart-item-specs"
+                    >ID: {item.id} • Wt: {item.weight}g • Ded: {formatCurrency(item.deduction)}</span
+                  >
+                </div>
+                <div style="display: flex; align-items: center; gap: 8px;">
+                  <span class="cart-item-price" style="color: #10b981;"
+                    >-{formatCurrency(item.finalValue)}</span
+                  >
+                  <button
+                    class="cart-item-remove"
+                    onclick={() => removeFromResaleCart(item.id)}
+                    aria-label="Remove item"
+                  >
+                    <span
+                      class="material-symbols-outlined"
+                      style="font-size: 18px;">delete</span
+                    >
+                  </button>
+                </div>
+              </div>
+            {/each}
+          {/if}
         {/if}
       </div>
 
-      {#if cart.length > 0}
+      {#if cart.length > 0 || resaleCart.length > 0}
         <div class="cart-footer">
           <div
             style="display: flex; flex-direction: column; gap: 8px; border-bottom: 1px solid var(--color-outline-variant); padding-bottom: 12px;"
           >
-            <div class="cart-summary-row">
-              <span>Total Weight:</span>
-              <span style="font-weight: 600;"
-                >{cartTotalWeight.toFixed(2)} g</span
-              >
-            </div>
-            <div class="cart-summary-row">
-              <span>Subtotal:</span>
-              <span>{formatCurrency(cartSubtotal)}</span>
-            </div>
-            <div class="cart-summary-row">
-              <span>GST (3%):</span>
-              <span>{formatCurrency(cartGst)}</span>
-            </div>
-            <div class="cart-total-row">
-              <span>Grand Total:</span>
-              <span style="color: var(--color-primary);"
-                >{formatCurrency(cartTotalPrice)}</span
+            {#if cart.length > 0}
+              <div class="cart-summary-row" style="font-size: 12px; color: var(--color-on-surface-variant);">
+                <span>Total Purchase Value:</span>
+                <span>{formatCurrency(cartTotalPrice)}</span>
+              </div>
+            {/if}
+            {#if resaleCart.length > 0}
+              <div class="cart-summary-row" style="font-size: 12px; color: #10b981;">
+                <span>Total Received Value:</span>
+                <span>-{formatCurrency(resaleTotalValue)}</span>
+              </div>
+            {/if}
+            <div class="cart-total-row" style="border-top: 1px dashed rgba(153, 144, 124, 0.3); padding-top: 8px; margin-top: 4px;">
+              <span>Net {netPayable >= 0 ? 'Payable' : 'Receivable'}:</span>
+              <span style="color: {netPayable >= 0 ? 'var(--color-primary)' : '#10b981'};"
+                >{formatCurrency(Math.abs(netPayable))}</span
               >
             </div>
           </div>
@@ -2300,15 +2104,15 @@
             <button
               type="submit"
               class="btn btn-primary"
-              style="width: 100%; margin-top: 8px; display: flex; align-items: center; justify-content: center; gap: 8px; padding: 12px;"
+              style="width: 100%; margin-top: 8px; display: flex; align-items: center; justify-content: center; gap: 8px; padding: 12px; {netPayable < 0 ? 'background: #10b981; border-color: #059669; color: white;' : ''}"
               disabled={checkoutStatus === "loading"}
             >
               <span class="material-symbols-outlined" style="font-size: 18px;"
                 >point_of_sale</span
               >
               {checkoutStatus === "loading"
-                ? "Processing Sale..."
-                : "Complete Sale & Invoice"}
+                ? "Processing..."
+                : cart.length === 0 ? "Generate Purchase Voucher" : "Complete Sale & Invoice"}
             </button>
           </form>
         </div>
@@ -2347,9 +2151,9 @@
           <div class="invoice-header">
             <div class="invoice-logo">SUNRISE FINE JEWELLS</div>
             <div
-              style="font-size: 10px; text-transform: uppercase; letter-spacing: 1px; margin-top: 4px; color: black;"
+              style="font-size: 14px; font-weight: bold; text-transform: uppercase; letter-spacing: 1px; margin-top: 4px; color: black;"
             >
-              Premium Bullion & Fine Artistry
+              {lastInvoice.invoiceId?.startsWith('PUR') ? 'Purchase Voucher' : 'Tax Invoice'}
             </div>
             <div style="font-size: 9px; color: #666; margin-top: 2px;">
               Vercel Live Cloud Portal
@@ -2365,64 +2169,91 @@
             {/if}
           </div>
 
-          <table class="invoice-table">
-            <thead>
-              <tr>
-                <th style="font-size: 10px; color: black; width: 55%;"
-                  >Item Description</th
-                >
-                <th
-                  style="text-align: right; font-size: 10px; color: black; width: 25%;"
-                  >Purity/Wt</th
-                >
-                <th
-                  style="text-align: right; font-size: 10px; color: black; width: 20%;"
-                  >Price</th
-                >
-              </tr>
-            </thead>
-            <tbody>
-              {#each lastInvoice.items as item}
+          {#if lastInvoice.items && lastInvoice.items.length > 0}
+            <div style="font-size: 10px; font-weight: bold; color: black; margin-bottom: 4px; border-bottom: 1px solid #ccc; padding-bottom: 2px;">
+              PURCHASED ITEMS
+            </div>
+            <table class="invoice-table" style="margin-bottom: 12px;">
+              <thead>
                 <tr>
-                  <td style="color: black;">
-                    <div>{item.name}</div>
-                    <div
-                      style="font-size: 8px; color: #555; font-family: monospace;"
-                    >
-                      ID: {item.id}
-                    </div>
-                  </td>
-                  <td
-                    style="text-align: right; vertical-align: top; color: black;"
-                    >{item.purity} / {item.weight}g</td
-                  >
-                  <td
-                    style="text-align: right; vertical-align: top; color: black;"
-                    >{formatCurrency(item.totalPrice)}</td
-                  >
+                  <th style="font-size: 10px; color: black; width: 55%;">Item Description</th>
+                  <th style="text-align: right; font-size: 10px; color: black; width: 25%;">Purity/Wt</th>
+                  <th style="text-align: right; font-size: 10px; color: black; width: 20%;">Price</th>
                 </tr>
-              {/each}
-              <tr class="total-border">
-                <td style="color: black;">Subtotal</td>
-                <td colspan="2" style="text-align: right; color: black;"
-                  >{formatCurrency(lastInvoice.subtotal)}</td
-                >
-              </tr>
-              <tr>
-                <td style="color: black;">Taxes & GST (3%)</td>
-                <td colspan="2" style="text-align: right; color: black;"
-                  >{formatCurrency(lastInvoice.gst)}</td
-                >
-              </tr>
-              <tr
-                style="font-size: 13px; font-weight: bold; border-top: 1px dashed black; border-bottom: 2px dashed black;"
-              >
-                <td style="padding: 8px 0; color: black;">Grand Total</td>
-                <td
-                  colspan="2"
-                  style="text-align: right; padding: 8px 0; color: black;"
-                  >{formatCurrency(lastInvoice.total)}</td
-                >
+              </thead>
+              <tbody>
+                {#each lastInvoice.items as item}
+                  <tr>
+                    <td style="color: black;">
+                      <div>{item.name}</div>
+                      <div style="font-size: 8px; color: #555; font-family: monospace;">ID: {item.id}</div>
+                    </td>
+                    <td style="text-align: right; vertical-align: top; color: black;">{item.purity} / {item.weight}g</td>
+                    <td style="text-align: right; vertical-align: top; color: black;">{formatCurrency(item.totalPrice)}</td>
+                  </tr>
+                {/each}
+              </tbody>
+            </table>
+          {/if}
+
+          {#if lastInvoice.resaleItems && lastInvoice.resaleItems.length > 0}
+            <div style="font-size: 10px; font-weight: bold; color: black; margin-bottom: 4px; border-bottom: 1px solid #ccc; padding-bottom: 2px; margin-top: 10px;">
+              RECEIVED ITEMS (OLD GOLD/SILVER)
+            </div>
+            <table class="invoice-table" style="margin-bottom: 12px;">
+              <thead>
+                <tr>
+                  <th style="font-size: 10px; color: black; width: 55%;">Item Description</th>
+                  <th style="text-align: right; font-size: 10px; color: black; width: 25%;">Purity/Wt</th>
+                  <th style="text-align: right; font-size: 10px; color: black; width: 20%;">Value</th>
+                </tr>
+              </thead>
+              <tbody>
+                {#each lastInvoice.resaleItems as item}
+                  <tr>
+                    <td style="color: black;">
+                      <div>{item.name}</div>
+                      {#if item.deduction > 0}
+                        <div style="font-size: 8px; color: #555;">Ded: {formatCurrency(item.deduction)}</div>
+                      {/if}
+                    </td>
+                    <td style="text-align: right; vertical-align: top; color: black;">{item.purity} / {item.weight}g</td>
+                    <td style="text-align: right; vertical-align: top; color: black;">-{formatCurrency(item.finalValue)}</td>
+                  </tr>
+                {/each}
+              </tbody>
+            </table>
+          {/if}
+
+          <table class="invoice-table">
+            <tbody>
+              {#if lastInvoice.items && lastInvoice.items.length > 0}
+                <tr class="total-border">
+                  <td style="color: black;">Purchase Subtotal</td>
+                  <td colspan="2" style="text-align: right; color: black;">{formatCurrency(lastInvoice.subtotal)}</td>
+                </tr>
+                <tr>
+                  <td style="color: black;">Taxes & GST (3%)</td>
+                  <td colspan="2" style="text-align: right; color: black;">{formatCurrency(lastInvoice.gst)}</td>
+                </tr>
+                <tr>
+                  <td style="color: black; font-weight: bold;">Total Purchase Value</td>
+                  <td colspan="2" style="text-align: right; color: black; font-weight: bold;">{formatCurrency(lastInvoice.total)}</td>
+                </tr>
+              {/if}
+              
+              {#if lastInvoice.resaleItems && lastInvoice.resaleItems.length > 0}
+                <tr style="border-top: 1px dashed #ccc;">
+                  <td style="color: black; font-weight: bold;">Total Received Value</td>
+                  <td colspan="2" style="text-align: right; color: black; font-weight: bold;">-{formatCurrency(lastInvoice.totalResaleValue)}</td>
+                </tr>
+              {/if}
+
+              <tr style="font-size: 13px; font-weight: bold; border-top: 1px dashed black; border-bottom: 2px dashed black;">
+                <td style="padding: 8px 0; color: black;">Net {(lastInvoice.netPayable >= 0 || lastInvoice.netPayable == null) ? 'Payable' : 'Receivable'}</td>
+                <td colspan="2" style="text-align: right; padding: 8px 0; color: black;">
+                  {formatCurrency(Math.abs(lastInvoice.netPayable != null ? lastInvoice.netPayable : lastInvoice.total))}
+                </td>
               </tr>
             </tbody>
           </table>
@@ -2430,9 +2261,9 @@
           <div
             style="text-align: center; font-size: 9px; margin-top: 25px; border-top: 1px dashed black; padding-top: 10px; color: #444;"
           >
-            Thank you for shopping at Sunrise Fine Jewells!
+            Thank you for visiting Sunrise Fine Jewells!
             <br />
-            This is a computer-generated invoice transaction.
+            This is a computer-generated transaction record.
           </div>
         </div>
 
@@ -2472,6 +2303,110 @@
 </footer>
 
 <style>
+  /* ═══════════════════════════════════════════════
+     TAB NAVIGATION BAR
+  ═══════════════════════════════════════════════ */
+  .tab-nav-bar {
+    display: flex;
+    gap: 4px;
+    padding: 0 var(--container-padding, 24px);
+    margin-bottom: 0;
+    border-bottom: 2px solid var(--color-outline-variant);
+    background: var(--color-surface);
+    position: sticky;
+    top: 0;
+    z-index: 100;
+    overflow-x: auto;
+  }
+
+  .tab-nav-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 12px 20px;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--color-on-surface-variant);
+    background: none;
+    border: none;
+    border-bottom: 2px solid transparent;
+    margin-bottom: -2px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    white-space: nowrap;
+    border-radius: var(--radius-sm) var(--radius-sm) 0 0;
+    font-family: var(--font-body);
+  }
+
+  .tab-nav-btn:hover {
+    color: var(--color-primary);
+    background: rgba(242, 202, 80, 0.05);
+  }
+
+  .tab-nav-btn.tab-active {
+    color: var(--color-primary);
+    border-bottom-color: var(--color-primary);
+    background: rgba(242, 202, 80, 0.04);
+  }
+
+  .tab-icon {
+    font-size: 16px;
+    vertical-align: middle;
+  }
+
+  .tab-badge {
+    background: var(--color-primary);
+    color: var(--color-on-primary, #1a1209);
+    font-size: 10px;
+    font-weight: 700;
+    padding: 2px 7px;
+    border-radius: 99px;
+    min-width: 20px;
+    text-align: center;
+  }
+
+  /* ═══════════════════════════════════════════════
+     TAB CONTENT AREAS
+  ═══════════════════════════════════════════════ */
+  .tab-content {
+    padding: 24px;
+  }
+
+  .tab-panel {
+    animation: tabFadeIn 0.25s ease-out;
+  }
+
+  @keyframes tabFadeIn {
+    from { opacity: 0; transform: translateY(6px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+
+  /* Overview tab: two-column layout */
+  .overview-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 24px;
+    align-items: start;
+  }
+
+  @media (max-width: 900px) {
+    .overview-grid {
+      grid-template-columns: 1fr;
+    }
+    .tab-nav-bar {
+      padding: 0 16px;
+    }
+    .tab-content {
+      padding: 16px;
+    }
+  }
+
+  /* Add Stock tab: centered max-width form */
+  .addstock-layout {
+    max-width: 860px;
+    margin: 0 auto;
+  }
+
   /* Scoped style enhancements for Stock Entry Panel & Sidebar Rates */
   .entry-form-grid {
     display: grid;
