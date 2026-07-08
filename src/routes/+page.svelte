@@ -876,9 +876,11 @@
         ledgerInvoices = ledgerData.invoices;
       } else {
         console.error("Failed to fetch ledger invoices:", ledgerData.error);
+        alert("Failed to load invoices from server: " + ledgerData.error + "\n\nTip: If on Vercel, ensure MongoDB Network Access allows 0.0.0.0/0");
       }
     } catch (err) {
       console.error("Error fetching ledger invoices:", err);
+      alert("Network error fetching invoices.");
     } finally {
       ledgerLoading = false;
     }
