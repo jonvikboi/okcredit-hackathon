@@ -28,12 +28,13 @@ export async function GET({ url }) {
     if (startDate || endDate) {
       query.createdAt = {};
       if (startDate) {
-        query.createdAt.$gte = new Date(startDate);
+        query.createdAt.$gte = new Date(startDate); // UTC midnight
       }
       if (endDate) {
-        // Set end date to end of day to make date range filters intuitive
+        // Set end date to end of day in UTC to make date range filters intuitive
+        // and avoid Vercel server timezone discrepancy.
         const end = new Date(endDate);
-        end.setHours(23, 59, 59, 999);
+        end.setUTCHours(23, 59, 59, 999);
         query.createdAt.$lte = end;
       }
     }
