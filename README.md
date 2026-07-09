@@ -1,1531 +1,338 @@
-# Sunrise Fine Jewells - React Rebuild Project Brief
+# Sunrise Fine Jewells — Live Bullion & POS Inventory Management Dashboard
 
-This document is written as a detailed handoff brief for AI Studio, Antigravity, or any AI coding tool that needs to recreate this project as a production-ready React application.
+[![SvelteKit Version](https://img.shields.io/badge/SvelteKit-v5-FF3E00?logo=svelte&logoColor=white)](https://kit.svelte.dev/)
+[![MongoDB Atlas](https://img.shields.io/badge/MongoDB-Atlas-47A248?logo=mongodb&logoColor=white)](https://www.mongodb.com/)
+[![NodeJS Version](https://img.shields.io/badge/Node-v18%2B-339933?logo=nodedotjs&logoColor=white)](https://nodejs.org/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
-Important instruction for the builder: rebuild this project using the React framework. Do not rebuild it in Svelte. The existing repository is a SvelteKit hackathon prototype, but the new app should be implemented with React.
+An enterprise-grade, internal management portal and Point-of-Sale (POS) system designed for **Sunrise Fine Jewells**. This application connects directly to a live bullion WebSocket feed to calculate dynamic, real-time market valuations for gold and silver stock. The portal includes advanced inventory management, a walk-in pricing calculator, a barcode generator, webcam-based scanning capabilities, and a unified sales/resale transaction engine.
 
-Recommended stack:
+---
 
-- Frontend: React with Vite, or Next.js if the builder wants one full-stack React framework.
-- UI state: React hooks plus Context/Zustand for cart, live rates, and inventory state.
-- Data fetching: TanStack Query or simple fetch hooks.
-- Backend: Node.js API routes. If using Next.js, use App Router API route handlers. If using React + Vite, use an Express/Fastify backend.
-- Database: MongoDB Atlas or a local MongoDB instance for development.
-- Deployment: Vercel, Render, Railway, or any Node-compatible host.
-- Barcode scanning: `html5-qrcode`.
-- Barcode generation: Code 39 barcode generation in SVG/canvas, or a maintained barcode library.
+## 📖 Table of Contents
+1. [Project Overview](#project-overview)
+2. [Features](#features)
+3. [System Architecture](#system-architecture)
+4. [Prerequisites](#prerequisites)
+5. [Installation & Setup](#installation-setup)
+6. [Configuration](#configuration)
+7. [Project Structure](#project-structure)
+8. [API Specifications](#api-specifications)
+9. [Core Business Logic & Valuation Formulas](#core-business-logic--valuation-formulas)
+10. [Usage Guide](#usage-guide)
+11. [Troubleshooting](#troubleshooting)
+12. [Contributing](#contributing)
+13. [License](#license)
 
-## 1. Project Summary
+---
 
-The project is an internal jewellery store management portal for Sunrise Fine Jewells. It helps a jeweller manage stock, calculate live gold/silver valuations, generate barcode labels, scan items, sell items, and print invoices.
+## 🔍 Project Overview
 
-The main use case is this:
+Sunrise Fine Jewells requires an agile internal tool that updates item pricing dynamically based on live market spot rates for gold and silver. Staff at the store counter can enter stock with specific properties (weight, making charges, purity), and the system handles the continuous recalculation of the store's inventory valuation.
 
-1. The store owner or staff enters jewellery stock into the system.
-2. Each stock item gets a unique barcode ID and printable jewellery tag.
-3. The app fetches live bullion rates for gold and silver.
-4. Every item valuation updates automatically when the market rate changes.
-5. Staff can search or scan a barcode to find an item.
-6. Staff can open a full valuation audit for the item.
-7. Staff can add items to a cart, complete checkout, remove sold stock from available inventory, and print an invoice.
-8. All stock and rate data must be connected to a database, not kept only in local frontend state.
+The system features:
+* **Live Price Discovery:** WebSocket feed integration with regional bullion feeds for 24K, 22K, 18K gold, and silver.
+* **Point of Sale (POS):** A unified cart that supports both client sales and client resales (exchanges).
+* **Jewellery Labeling:** Automatic generation of unique Code 39 barcodes and printable jewellery tags.
+* **Webcam Scanning:** Direct hardware integration using `html5-qrcode` to scan item tags at checkout.
 
-The app should feel like a premium but practical dashboard for a jewellery shop: fast, clear, reliable, and easy to use at a store counter.
+---
 
-## 2. Existing Prototype Overview
+## ⚡ Features
 
-The current prototype contains these major pieces:
+### 📈 Live Bullion Feed & Manual Overrides
+* **Real-time Synchronization:** Subscribes to the live Ambicaa bullion feed. In case of connection drops, it gracefully falls back to the last recorded rates in the database.
+* **Purity Scaling:** Auto-calculates pricing parameters for 24K, 22K, and 18K gold.
+* **Merchant Rate Overrides:** Store owners can toggle off live feeds to freeze rates manually to a locked per-gram value for store-wide counter negotiations.
 
-- A main dashboard page with live rates, stock catalog, stock entry, cart, invoice, scanner, and calculator.
-- A MongoDB helper used to connect to database `okcredit_inventory`.
-- Product persistence in the MongoDB `products` collection.
-- A `rates` collection that stores the latest gold/silver rate document.
-- A rate fetcher that connects to the Ambicaa bullion WebSocket feed.
-- API endpoints for product creation/deletion and rate retrieval.
-- A Vercel cron route for refreshing rates in the background.
-- A local `products.json` fallback for development.
-- A large `ambicaa_rates.csv` file containing captured historic rate ticks.
+### 💍 Advanced Inventory Control & Stock Entry
+* **Dynamic Catalog:** Live list of available jewelry sorted by valuation, category, weight, or date added.
+* **Smart ID Generation:** Creates structured, non-duplicate barcode IDs (`GLD-[CATEGORY]-[YYYYMMDD]-[SEQ]`).
+* **Tag Customization:** Generates printable jewellery tags (`600x300px` canvas layout) with the store name, generated barcode image, and item SKU.
 
-The React rebuild should keep the same business purpose and feature set, but the implementation should be cleaner and production-oriented.
+### 🔄 Unified Cart & Resale (Exchange) Module
+* **Sales Cart:** Select available items from inventory to sell.
+* **Resale Cart:** Process client returns, scrap metal purchases, or buybacks. Accepts metal type, purity, weight, and flat deductions.
+* **Dynamic Net Balance:** Instantly evaluates whether the customer has a Net Payable balance (to the store) or a Net Receivable balance (due from the store).
+* **Smart Invoicing:** Automatically flags transactions as a **Tax Invoice** (for sales) or a **Purchase Voucher** (for buybacks/scrap purchases) based on net transaction structure.
 
-## 3. Core App Name and Positioning
+---
 
-Suggested product name:
+## 🏗️ System Architecture
 
-Sunrise Fine Jewells Inventory and Bullion Dashboard
+The project is built on **SvelteKit** using Svelte 5's reactive state system (Runes: `$state`, `$derived`, `$effect`) for instant UI updates.
 
-Alternative shorter name:
-
-Sunrise Jewells POS Dashboard
-
-Purpose:
-
-An internal jewellery inventory, valuation, barcode, and sales dashboard that recalculates product prices from live gold/silver market rates.
-
-Target users:
-
-- Jewellery shop owner
-- Store manager
-- Sales staff
-- Back-office inventory staff
-
-Primary environment:
-
-- Desktop or laptop browser at shop counter
-- Tablet support
-- Mobile responsive support for quick checks
-
-## 4. Must Use React
-
-Build the new application using React.
-
-Suggested React architecture:
-
-- `App.jsx` as the root app shell if using Vite.
-- `pages` or route components for Dashboard, Inventory, Sales, and Settings.
-- Reusable components for rate cards, product table, product form, barcode label, scanner modal, cart drawer, invoice modal, and valuation breakdown modal.
-- Custom hooks:
-  - `useRates()`
-  - `useProducts()`
-  - `useCart()`
-  - `useBarcodeScanner()`
-  - `useValuation(product, rates)`
-- API client module:
-  - `api/products.js`
-  - `api/rates.js`
-  - `api/sales.js`
-
-If using Next.js:
-
-- Use React Server Components only where helpful.
-- Put interactive dashboard pieces behind `"use client"`.
-- Use `/app/api/.../route.js` for backend routes.
-- Use server-side MongoDB connection helpers.
-
-If using React + Vite:
-
-- Build the UI in Vite.
-- Create a separate Node/Express backend for `/api/products`, `/api/rates`, `/api/sales`, and `/api/cron/fetch-rates`.
-- Proxy API calls from Vite dev server to the backend.
-
-## 5. Main Features
-
-### 5.1 Live Bullion Rates
-
-The app must show live rates for:
-
-- 24K gold, per gram
-- 22K gold, per gram
-- 18K gold, per gram
-- Silver, per gram
-
-The rates should update automatically and drive every valuation in the app.
-
-Existing prototype logic:
-
-- Gold 24K rate is derived from futures ask price.
-- Gold 22K = `Math.round(gold24k * (22 / 24))`
-- Gold 18K = `Math.round(gold24k * (18 / 24))`
-- Silver = converted from ask price to per-gram value.
-
-Rate conversion formulas:
-
-```js
-const gold24kPerGram = Math.round(goldAsk / 10);
-const gold22kPerGram = Math.round(gold24kPerGram * (22 / 24));
-const gold18kPerGram = Math.round(gold24kPerGram * (18 / 24));
-const silverPerGram = Math.round((silverAsk / 1000) * 100) / 100;
+```mermaid
+graph TD
+    A[Ambicaa WebSocket Feed] -->|Base64 Gzip Ticks| B(Rate Fetcher CRON / Worker)
+    B -->|BSON Rates| C[(MongoDB Atlas)]
+    C -->|GET /api/rates| D[SvelteKit Frontend]
+    C -->|GET /api/products| D
+    D -->|Realtime UI Runes| E[POS Checkout Engine]
+    E -->|POST /api/invoices| C
+    E -->|DELETE sold items| C
 ```
 
-The UI must show whether rates are:
+### Database Schema Collections
 
-- Live
-- Polling from database/API
-- Stale
-- Manually overridden by owner
+* **`products`**: Stores current stock information (`status: "available"`).
+* **`rates`**: Holds the latest rate document cached from the WebSocket server.
+* **`invoice`**: Records complete transaction snapshots including sold items, received items, dates, and client information.
 
-### 5.2 Manual Rate Override
+---
 
-The app needs an owner override toggle.
+## 🛠️ Prerequisites
 
-When override is off:
+Before setting up the project, make sure you have the following installed:
+* **Node.js** (v18.0.0 or higher)
+* **npm** (v9.0.0 or higher)
+* **MongoDB** (Local instance or MongoDB Atlas Connection URI)
 
-- Use live database/API rates.
+---
 
-When override is on:
+## 🚀 Installation & Setup
 
-- Owner can manually enter 24K gold rate per gram.
-- Owner can manually enter silver rate per gram.
-- 22K and 18K rates are recalculated from the manual 24K value.
-- All inventory valuations and calculator results update immediately.
+1. **Clone the Repository:**
+   ```bash
+   git clone https://github.com/jonvikboi/okcredit-hackathon.git
+   cd okcredit-hackathon
+   ```
 
-This is important because jewellery stores sometimes sell using owner-approved rates instead of raw market feed rates.
+2. **Install Dependencies:**
+   ```bash
+   npm install
+   ```
 
-### 5.3 Stock/Inventory Connected to Database
+3. **Configure Environment Variables:**
+   Create a `.env` file in the root directory (see [Configuration](#configuration)).
 
-Stock must be connected to a database. It must not be hardcoded only in frontend arrays.
+4. **Run Development Server:**
+   ```bash
+   npm run dev
+   ```
+   Open your browser and navigate to `http://localhost:5173`.
 
-Use MongoDB collections:
+5. **Build for Production:**
+   ```bash
+   npm run build
+   ```
 
-- `products`
-- `rates`
-- `rate_history`
-- `sales`
-- `users` or `staff` if authentication is added
-- `audit_logs`
+---
 
-Products should load from the database on page load.
+## ⚙️ Configuration
 
-New stock entries should be saved to the database.
+Set up the following environment variables in your `.env` file:
 
-Sold items should be updated in the database.
-
-Recommended production behavior:
-
-- Do not permanently delete products during checkout.
-- Mark sold products with `status: "sold"` and create a sale/invoice record.
-- Keep the item history for audit and accounting.
-
-The prototype currently deletes sold items from available inventory after checkout. The rebuild should improve this by marking items as sold while hiding them from available stock views.
-
-### 5.4 Merchant Stock Entry
-
-The dashboard must include a stock entry form for adding new jewellery items.
-
-Fields:
-
-- Product category
-- Metal type
-- Purity
-- Weight in grams
-- Making charge percentage
-- Fixed gemstone/accent value
-- Product name
-- Description
-- Image URL or uploaded product/label image
-
-Categories from the prototype:
-
-- Necklace
-- Ring
-- Bracelet
-- Earrings
-- Watch
-
-Additional useful categories:
-
-- Pendant
-- Chain
-- Bangle
-- Coin
-- Silver Item
-- Custom
-
-Purity values:
-
-- 24K
-- 22K
-- 18K
-- Silver
-
-Auto-generated names:
-
-- Example: `22K Gold Ring`
-- Example: `18K Gold Earrings`
-
-Auto-generated descriptions:
-
-- Example: `Hand-crafted 22K gold ring with premium finish.`
-
-Manual edits should be allowed.
-
-### 5.5 Barcode ID Generation
-
-Every item must have a unique barcode ID.
-
-Current ID format:
-
-```txt
-PREFIX-YYYYMMDD-SEQ
-```
-
-Examples:
-
-```txt
-RNG-20260610-001
-NKL-20260610-001
-BRC-20260610-001
-ERR-20260610-001
-WCH-20260610-001
-```
-
-Prefix map:
-
-```js
-const prefixMap = {
-  Ring: "RNG",
-  Necklace: "NKL",
-  Bracelet: "BRC",
-  Earrings: "ERR",
-  Watch: "WCH",
-  Pendant: "PND",
-  Chain: "CHN",
-  Bangle: "BNG",
-  Coin: "CON",
-  Silver: "SLV",
-  Custom: "GEN"
-};
-```
-
-The app must check existing products in the database before assigning the next sequence number. Avoid duplicate IDs.
-
-### 5.6 Barcode Label Generation
-
-The app should generate a printable jewellery label for each item.
-
-Label should include:
-
-- Store name: `SUNRISE FINE JEWELLS`
-- Barcode
-- Item ID
-- Optional weight/purity if space allows
-
-Prototype uses Code 39 barcode generated as SVG and then combines it into a canvas PNG label.
-
-React rebuild options:
-
-- Use a barcode library such as `jsbarcode`.
-- Or implement Code 39 generation manually.
-- Generate preview as SVG in the UI.
-- Allow downloading the label as PNG.
-- Allow printing labels.
-
-Label output:
-
-- PNG download named `{itemId}_label.png`
-- Clear black-on-white barcode
-- Works on normal desktop printers and small jewellery tag printers
-
-### 5.7 Stock Valuation Catalog
-
-The main dashboard needs a stock catalog/table.
-
-The table should show:
-
-- Thumbnail or barcode preview
-- Item ID
-- Product name
-- Category
-- Purity
-- Weight
-- Rate used
-- Metal value
-- Making charge
-- Fixed value
-- GST
-- Total valuation
-- Actions
-
-Actions:
-
-- Add to cart
-- Open full valuation audit modal
-- Download/print label
-- Edit item
-- Mark as unavailable/sold if user has permission
-
-Search:
-
-- Search by product name
-- Search by barcode/item ID
-
-Filters:
-
-- All
-- Category
-- Purity
-- Available/sold status
-- Metal type
-
-Sort options:
-
-- Newest first
-- Highest value
-- Lowest value
-- Weight high to low
-- Weight low to high
-
-### 5.8 Valuation Audit Modal
-
-Every product should have a full audit view.
-
-The modal should show:
-
-- Barcode preview
-- Item name
-- Item ID
-- Category
-- Purity
-- Weight
-- Description
-- Current rate per gram
-- Metal value calculation
-- Making charge calculation
-- Fixed gemstone/accent value
-- Subtotal
-- GST
-- Final total
-- Rate source and timestamp
-
-Use this calculation:
-
-```js
-const metalValue = weightGrams * ratePerGram;
-const makingCharges = metalValue * (makingChargePercent / 100);
-const fixedValue = gemstoneOrAccentValue || 0;
-const subtotal = metalValue + makingCharges + fixedValue;
-const gst = subtotal * 0.03;
-const total = subtotal + gst;
-```
-
-Round display values to whole INR unless the field is a per-gram rate that needs decimals.
-
-GST:
-
-- Use 3% GST for jewellery valuation.
-- Store this as a configurable setting if possible.
-
-### 5.9 Walk-in Calculator
-
-The app needs a quick walk-in calculator for estimating jewellery pricing without adding an inventory item.
-
-Fields:
-
-- Weight in grams
-- Purity
-- Making charge percentage
-- Fixed gemstone/accent value
-
-Output:
-
-- Estimated total with GST
-
-This calculator must use the same active rates as the inventory valuation:
-
-- Live rates if override is off
-- Manual owner rates if override is on
-
-### 5.10 Cart and Checkout
-
-The app should include a cart drawer.
-
-Users can add items from:
-
-- Stock table
-- Full audit modal
-- Barcode scan result
-
-Cart should show:
-
-- Item name
-- Item ID
-- Purity
-- Weight
-- Current total valuation
-- Remove button
-
-Cart totals:
-
-- Total weight
-- Subtotal
-- GST
-- Grand total
-
-Checkout form:
-
-- Customer name
-- Customer phone number
-- Optional payment method
-
-Checkout behavior:
-
-1. Validate cart is not empty.
-2. Capture a rate snapshot at checkout time.
-3. Create a `sales` record in the database.
-4. Mark products as `sold`.
-5. Show invoice modal.
-6. Clear cart.
-
-Do not allow the same item to be added to the cart twice.
-
-### 5.11 Invoice Receipt
-
-After checkout, show an invoice modal.
-
-Invoice should include:
-
-- Store name
-- Invoice number
-- Date and time
-- Customer name
-- Customer phone
-- Item rows
-- Item ID
-- Purity/weight
-- Price
-- Subtotal
-- GST
-- Grand total
-- Thank you message
-
-Add a print button using `window.print()`, or use a PDF generation library if needed.
-
-Recommended invoice number:
-
-```txt
-SRF-YYYYMMDD-000001
-```
-
-The prototype uses a random invoice number such as `SRF-123456`. The rebuild should use a database-backed sequence or timestamp-based ID to avoid duplicate invoices.
-
-### 5.12 Webcam Barcode Scanner
-
-The app should include a scanner modal using webcam access.
-
-Use library:
-
-```txt
-html5-qrcode
-```
-
-Scanner behavior:
-
-1. User clicks Scan Barcode.
-2. Browser asks for camera permission.
-3. App lists available cameras if more than one exists.
-4. User points camera at jewellery tag.
-5. Scanner reads barcode text.
-6. App searches the product database/current inventory by item ID.
-7. If product exists and is available, open valuation modal or add it to cart.
-8. If product is not found, show a clear error message.
-
-Barcode scanner UX:
-
-- Show camera preview.
-- Show scan box/reticle.
-- Show errors for no camera, denied permission, unsupported browser, or item not found.
-- Stop camera stream when modal closes.
-
-### 5.13 Live Feed Audit Console
-
-The dashboard should show recent market feed ticks.
-
-Each log row should include:
-
-- Timestamp
-- Symbol
-- Bid
-- Ask
-- LTP
-
-The logs help the owner see what market data is feeding the valuation.
-
-## 6. Live Rate Integration Details
-
-The prototype connects to Ambicaa's bullion feed:
-
-```txt
-ws://ambicaaspot.com:1001/bullion?user=ambicaa&auth=1&type=web
-```
-
-Frontend dev proxy in the prototype:
-
-```txt
-/ws-bullion -> ws://ambicaaspot.com:1001/bullion
-```
-
-The feed behaves like a SignalR-style WebSocket.
-
-Initial handshake:
-
-```js
-ws.send('{"protocol":"json","version":1}\x1e');
-```
-
-Subscription message after handshake:
-
-```js
-ws.send(JSON.stringify({
-  arguments: ["ambicaa"],
-  invocationId: "0",
-  target: "client",
-  type: 1
-}) + "\x1e");
-```
-
-Relevant message targets:
-
-```txt
-workerPublish
-workerPublishCoin
-referanceDetails
-symbolDetails
-```
-
-The message payload can contain a base64-encoded gzip JSON string. Decode it before reading rates.
-
-Browser decoding approach:
-
-```js
-const binaryString = atob(encoded);
-const bytes = new Uint8Array(binaryString.length);
-for (let i = 0; i < binaryString.length; i++) {
-  bytes[i] = binaryString.charCodeAt(i);
-}
-// Then use DecompressionStream("gzip") and JSON.parse(...)
-```
-
-Node decoding approach:
-
-```js
-import zlib from "zlib";
-
-const compressed = Buffer.from(encoded, "base64");
-const decompressed = zlib.gunzipSync(compressed);
-const payload = JSON.parse(decompressed.toString("utf-8"));
-```
-
-Relevant symbols:
-
-Gold:
-
-```txt
-GOLD26JUNFUT
-117574919
-GOLD26AUGFUT
-119445255
-```
-
-Silver:
-
-```txt
-SILVER26JULFUT
-118822407
-SILVER26SEPFUT
-120761607
-```
-
-Suggested production architecture for rates:
-
-1. Backend worker connects to the bullion WebSocket.
-2. Backend extracts gold and silver rates.
-3. Backend stores latest rates in MongoDB.
-4. Backend stores recent ticks in `rate_history` or embedded `logs`.
-5. Frontend polls `/api/rates` every 5 seconds or subscribes via Server-Sent Events/WebSocket.
-6. If the feed is unavailable, frontend continues using latest database rates and marks them stale.
-7. If the database has no rate yet, use safe fallback rates so the app does not crash.
-
-Recommended rate freshness:
-
-- Fresh: less than 60 seconds old
-- Warning/stale: older than 5 minutes
-- Offline: no successful update for 30 minutes
-
-The current prototype has a cron route. Its comment says it should run every minute, but its Vercel schedule is currently daily:
-
-```json
-{
-  "crons": [
-    {
-      "path": "/api/cron/fetch-rates",
-      "schedule": "0 0 * * *"
-    }
-  ]
-}
-```
-
-For live-ish production behavior, change this to every minute if the deployment platform allows it:
-
-```json
-{
-  "crons": [
-    {
-      "path": "/api/cron/fetch-rates",
-      "schedule": "* * * * *"
-    }
-  ]
-}
-```
-
-If true real-time updates are required, use a persistent backend worker instead of relying only on serverless cron.
-
-## 7. Database Design
-
-Use MongoDB. The app should read/write stock and sales data from the database.
-
-### 7.1 `products` Collection
-
-Recommended schema:
-
-```json
-{
-  "_id": "ObjectId",
-  "itemCode": "RNG-20260610-001",
-  "name": "22K Gold Ring",
-  "category": "Ring",
-  "metal": "Gold",
-  "purity": "22K",
-  "weightGrams": 5.25,
-  "makingChargePercent": 12,
-  "fixedValue": 0,
-  "description": "Hand-crafted 22K gold ring with premium finish.",
-  "imageUrl": "https://example.com/image.jpg",
-  "labelImage": "data:image/png;base64,...",
-  "status": "available",
-  "createdAt": "2026-06-10T00:00:00.000Z",
-  "updatedAt": "2026-06-10T00:00:00.000Z",
-  "soldAt": null,
-  "createdBy": "staff-user-id"
-}
-```
-
-Allowed product statuses:
-
-```txt
-available
-reserved
-sold
-archived
-```
-
-Important:
-
-- Keep `itemCode` unique.
-- Add an index on `itemCode`.
-- Add indexes on `status`, `category`, and `createdAt`.
-
-MongoDB indexes:
-
-```js
-db.products.createIndex({ itemCode: 1 }, { unique: true });
-db.products.createIndex({ status: 1 });
-db.products.createIndex({ category: 1 });
-db.products.createIndex({ createdAt: -1 });
-```
-
-If matching the current prototype exactly, the old field names are:
-
-```json
-{
-  "id": "GLD-R002",
-  "name": "Stellar Diamond Ring",
-  "purity": "18K",
-  "weight": 5,
-  "makingCharge": 0.15,
-  "fixedValue": 55000,
-  "category": "Ring",
-  "description": "An elegant solitaire diamond ring...",
-  "image": "https://example.com/image.jpg"
-}
-```
-
-For the rebuild, prefer the clearer production schema with `itemCode`, `weightGrams`, and `makingChargePercent`.
-
-### 7.2 `rates` Collection
-
-Store the latest rate document:
-
-```json
-{
-  "_id": "ObjectId",
-  "key": "latest_rates",
-  "gold24kPerGram": 15485,
-  "gold22kPerGram": 14195,
-  "gold18kPerGram": 11614,
-  "silverPerGram": 266.16,
-  "source": "ambicaa",
-  "timestamp": "2026-06-10T00:00:00.000Z",
-  "stale": false,
-  "logs": [
-    {
-      "timestamp": "2026-06-10T10:23:07.000Z",
-      "symbol": "GOLD26AUGFUT",
-      "bid": 154773,
-      "ask": 154809,
-      "ltp": 154816
-    }
-  ]
-}
-```
-
-Index:
-
-```js
-db.rates.createIndex({ key: 1 }, { unique: true });
-```
-
-### 7.3 `rate_history` Collection
-
-Store rate ticks for audit and charts:
-
-```json
-{
-  "_id": "ObjectId",
-  "symbol": "GOLD26AUGFUT",
-  "bid": 154773,
-  "ask": 154809,
-  "ltp": 154816,
-  "derivedRatePerGram": 15481,
-  "metal": "Gold",
-  "timestamp": "2026-06-10T10:23:07.000Z",
-  "source": "ambicaa"
-}
-```
-
-Indexes:
-
-```js
-db.rate_history.createIndex({ timestamp: -1 });
-db.rate_history.createIndex({ symbol: 1, timestamp: -1 });
-```
-
-### 7.4 `sales` Collection
-
-Store checkout/invoice data:
-
-```json
-{
-  "_id": "ObjectId",
-  "invoiceNo": "SRF-20260610-000001",
-  "customer": {
-    "name": "Walk-in Customer",
-    "phone": "9999999999"
-  },
-  "items": [
-    {
-      "productId": "ObjectId",
-      "itemCode": "RNG-20260610-001",
-      "name": "22K Gold Ring",
-      "category": "Ring",
-      "purity": "22K",
-      "weightGrams": 5.25,
-      "ratePerGram": 14195,
-      "metalValue": 74524,
-      "makingCharge": 8943,
-      "fixedValue": 0,
-      "subtotal": 83467,
-      "gst": 2504,
-      "total": 85971
-    }
-  ],
-  "rateSnapshot": {
-    "gold24kPerGram": 15485,
-    "gold22kPerGram": 14195,
-    "gold18kPerGram": 11614,
-    "silverPerGram": 266.16,
-    "timestamp": "2026-06-10T10:30:00.000Z",
-    "isManualOverride": false
-  },
-  "subtotal": 83467,
-  "gst": 2504,
-  "total": 85971,
-  "paymentMethod": "cash",
-  "status": "completed",
-  "createdAt": "2026-06-10T10:30:00.000Z",
-  "createdBy": "staff-user-id"
-}
-```
-
-Indexes:
-
-```js
-db.sales.createIndex({ invoiceNo: 1 }, { unique: true });
-db.sales.createIndex({ createdAt: -1 });
-db.sales.createIndex({ "customer.phone": 1 });
-```
-
-### 7.5 `audit_logs` Collection
-
-Store important actions:
-
-```json
-{
-  "_id": "ObjectId",
-  "type": "product.created",
-  "actorId": "staff-user-id",
-  "message": "Created product RNG-20260610-001",
-  "metadata": {
-    "itemCode": "RNG-20260610-001"
-  },
-  "createdAt": "2026-06-10T10:30:00.000Z"
-}
-```
-
-Useful audit types:
-
-```txt
-product.created
-product.updated
-product.sold
-product.archived
-rate.updated
-rate.override.enabled
-rate.override.disabled
-sale.completed
-invoice.printed
-scanner.item_found
-scanner.item_not_found
-```
-
-## 8. API Requirements
-
-Use JSON APIs.
-
-### 8.1 Product APIs
-
-`GET /api/products`
-
-Query params:
-
-- `status=available`
-- `category=Ring`
-- `search=RNG`
-- `purity=22K`
-
-Response:
-
-```json
-{
-  "success": true,
-  "products": []
-}
-```
-
-`POST /api/products`
-
-Creates a new product and barcode ID.
-
-Request:
-
-```json
-{
-  "name": "22K Gold Ring",
-  "category": "Ring",
-  "metal": "Gold",
-  "purity": "22K",
-  "weightGrams": 5.25,
-  "makingChargePercent": 12,
-  "fixedValue": 0,
-  "description": "Hand-crafted 22K gold ring with premium finish.",
-  "imageUrl": ""
-}
-```
-
-Response:
-
-```json
-{
-  "success": true,
-  "product": {}
-}
-```
-
-`PATCH /api/products/:itemCode`
-
-Updates an item.
-
-`DELETE /api/products/:itemCode`
-
-Archive only. Avoid hard delete in production.
-
-`POST /api/products/:itemCode/mark-sold`
-
-Marks one item as sold.
-
-### 8.2 Rate APIs
-
-`GET /api/rates`
-
-Returns latest rates:
-
-```json
-{
-  "success": true,
-  "source": "mongodb",
-  "stale": false,
-  "ageSeconds": 12,
-  "gold24kPerGram": 15485,
-  "gold22kPerGram": 14195,
-  "gold18kPerGram": 11614,
-  "silverPerGram": 266.16,
-  "timestamp": "2026-06-10T10:30:00.000Z",
-  "logs": []
-}
-```
-
-`POST /api/rates/refresh`
-
-Protected endpoint used by cron or admin action.
-
-Headers:
-
-```txt
-Authorization: Bearer CRON_SECRET
-```
-
-Behavior:
-
-- Connect to Ambicaa WebSocket.
-- Wait for a valid tick.
-- Save latest rates to MongoDB.
-- Save recent logs/history.
-- Return saved rates.
-
-`GET /api/rates/stream`
-
-Optional Server-Sent Events endpoint for live updates.
-
-### 8.3 Sales APIs
-
-`POST /api/sales/checkout`
-
-Request:
-
-```json
-{
-  "customer": {
-    "name": "Walk-in Customer",
-    "phone": ""
-  },
-  "itemCodes": ["RNG-20260610-001"],
-  "paymentMethod": "cash",
-  "manualRateOverride": null
-}
-```
-
-Response:
-
-```json
-{
-  "success": true,
-  "sale": {},
-  "invoice": {}
-}
-```
-
-Checkout must:
-
-- Validate all items exist.
-- Validate all items are `available`.
-- Recalculate totals on backend using the active rate snapshot.
-- Mark items as `sold`.
-- Create one `sales` document.
-- Return invoice data.
-
-`GET /api/sales`
-
-List historical sales.
-
-`GET /api/sales/:invoiceNo`
-
-Open invoice details.
-
-### 8.4 Barcode APIs
-
-Barcode generation can happen on frontend, but the backend should still own the unique ID generation.
-
-Suggested endpoint:
-
-`GET /api/products/next-code?category=Ring`
-
-Response:
-
-```json
-{
-  "success": true,
-  "itemCode": "RNG-20260610-001"
-}
-```
-
-Or generate the code during `POST /api/products`.
-
-## 9. React Component Breakdown
-
-Suggested component structure:
-
-```txt
-src/
-  App.jsx
-  main.jsx
-  styles/
-    globals.css
-  api/
-    products.js
-    rates.js
-    sales.js
-  hooks/
-    useRates.js
-    useProducts.js
-    useCart.js
-    useValuation.js
-    useBarcodeScanner.js
-  components/
-    AppShell.jsx
-    DashboardHeader.jsx
-    MetricCard.jsx
-    LiveRatesPanel.jsx
-    RateOverrideControls.jsx
-    StockEntryForm.jsx
-    BarcodeLabel.jsx
-    ProductCatalog.jsx
-    ProductFilters.jsx
-    ProductTable.jsx
-    ProductRow.jsx
-    ValuationAuditModal.jsx
-    ScannerModal.jsx
-    CartDrawer.jsx
-    InvoiceModal.jsx
-    WalkInCalculator.jsx
-    LiveFeedConsole.jsx
-  utils/
-    currency.js
-    valuation.js
-    barcode.js
-    date.js
-```
-
-Backend structure if using Express:
-
-```txt
-server/
-  index.js
-  db.js
-  routes/
-    products.js
-    rates.js
-    sales.js
-  services/
-    rateFetcher.js
-    valuationService.js
-    invoiceService.js
-    barcodeCodeService.js
-  middleware/
-    auth.js
-```
-
-Backend structure if using Next.js:
-
-```txt
-app/
-  page.jsx
-  api/
-    products/
-      route.js
-    products/[itemCode]/
-      route.js
-    rates/
-      route.js
-    rates/refresh/
-      route.js
-    sales/checkout/
-      route.js
-lib/
-  db.js
-  rateFetcher.js
-  valuation.js
-  invoice.js
-```
-
-## 10. UI/UX Requirements
-
-Design style:
-
-- Premium jewellery dashboard.
-- Warm off-white background.
-- Antique gold accent.
-- Clear cards and tables.
-- Professional, not flashy.
-- Desktop-first but responsive.
-
-Recommended colors from the prototype:
-
-```css
-:root {
-  --color-bg: #f4f1ec;
-  --color-surface: #ffffff;
-  --color-surface-muted: #f8f5f0;
-  --color-primary: #9a7b3e;
-  --color-primary-light: #c4a35a;
-  --color-accent: #3b6e5e;
-  --color-text: #1a1612;
-  --color-text-muted: #6b5e4c;
-  --color-border: #d2c8b8;
-  --color-error: #b91c1c;
-  --color-success: #166534;
-}
-```
-
-Typography:
-
-- Headings: serif font such as Cormorant Garamond or Playfair Display.
-- Body: Inter, Montserrat, or system sans-serif.
-- Codes/barcodes/logs: JetBrains Mono or monospace.
-
-Layout:
-
-- Header with app title and cart button.
-- Two-column dashboard on desktop:
-  - Left: stock entry and catalog.
-  - Right: live rates, totals, calculator, logs.
-- Single-column layout on tablets/mobile.
-- Sticky or easily reachable cart button.
-
-No marketing landing page is needed. The first screen should be the working dashboard.
-
-## 11. Important Business Rules
-
-1. All prices are dynamic and depend on the active rate at the moment of viewing.
-2. Sold invoice totals must use a fixed rate snapshot from checkout time, not future live rates.
-3. Available inventory valuation should recalculate when live rates change.
-4. Manual rate override should affect UI calculations immediately.
-5. Manual rate override should be clearly visible so staff know prices are not using live rates.
-6. Product IDs/barcodes must be unique.
-7. Scanner must not sell unavailable/sold items.
-8. Checkout must be recalculated on the backend to prevent frontend manipulation.
-9. Database is the source of truth for stock and sales.
-10. Rate feed failures must not break the app.
-
-## 12. Valuation Utility
-
-Implement a shared valuation function and use it everywhere.
-
-```js
-export function getRateForProduct(product, rates) {
-  if (product.metal === "Silver" || product.purity === "Silver") {
-    return rates.silverPerGram;
-  }
-
-  if (product.purity === "24K") return rates.gold24kPerGram;
-  if (product.purity === "22K") return rates.gold22kPerGram;
-  if (product.purity === "18K") return rates.gold18kPerGram;
-
-  return rates.gold24kPerGram;
-}
-
-export function calculateValuation(product, rates, gstPercent = 3) {
-  const ratePerGram = getRateForProduct(product, rates);
-  const weightGrams = Number(product.weightGrams || product.weight || 0);
-  const makingChargePercent = Number(product.makingChargePercent ?? 0);
-  const fixedValue = Number(product.fixedValue || 0);
-
-  const metalValue = weightGrams * ratePerGram;
-  const makingCharge = metalValue * (makingChargePercent / 100);
-  const subtotal = metalValue + makingCharge + fixedValue;
-  const gst = subtotal * (gstPercent / 100);
-  const total = subtotal + gst;
-
-  return {
-    ratePerGram,
-    metalValue: Math.round(metalValue),
-    makingCharge: Math.round(makingCharge),
-    fixedValue: Math.round(fixedValue),
-    subtotal: Math.round(subtotal),
-    gst: Math.round(gst),
-    total: Math.round(total)
-  };
-}
-```
-
-If importing old prototype data, convert:
-
-```js
-const product = {
-  itemCode: old.id,
-  weightGrams: old.weight,
-  makingChargePercent: old.makingCharge <= 1 ? old.makingCharge * 100 : old.makingCharge,
-  imageUrl: old.image
-};
-```
-
-## 13. Environment Variables
-
-Required:
-
-```txt
-MONGODB_URI=mongodb+srv://...
+```env
+# MongoDB Connection Config
+MONGODB_URI=mongodb+srv://<username>:<password>@cluster.mongodb.net/
 DATABASE_NAME=okcredit_inventory
-CRON_SECRET=some-secure-secret
-```
 
-Optional:
-
-```txt
+# Bullion Feed Settings
 RATE_FEED_URL=ws://ambicaaspot.com:1001/bullion?user=ambicaa&auth=1&type=web
+
+# Global POS Settings
 GST_PERCENT=3
-NEXT_PUBLIC_APP_NAME=Sunrise Fine Jewells
 ```
 
-Never expose `MONGODB_URI` or `CRON_SECRET` to the browser.
+---
 
-## 14. Authentication and Permissions
-
-The prototype does not include full authentication. The production rebuild should ideally add it.
-
-Roles:
-
-- Owner/admin
-- Manager
-- Sales staff
-
-Permissions:
-
-Owner/admin:
-
-- Add/edit/archive products
-- Override rates
-- View sales history
-- View audit logs
-- Manage staff
-
-Manager:
-
-- Add/edit products
-- Complete checkout
-- View sales
-
-Sales staff:
-
-- Search/scan products
-- Add to cart
-- Complete checkout
-- Print invoice
-
-Manual rate override should require owner/admin permission.
-
-## 15. Error Handling
-
-Handle these cases:
-
-- MongoDB connection failed
-- Rate feed unavailable
-- Rate document missing
-- Product creation validation failed
-- Duplicate barcode ID
-- Camera permission denied
-- No camera found
-- Barcode scanned but item not found
-- Barcode scanned but item already sold
-- Checkout attempted with empty cart
-- Checkout attempted with stale product data
-- Network request failed
-
-Show clear, human-readable messages.
-
-## 16. Validation Rules
-
-Product form:
-
-- Weight must be greater than 0.
-- Making charge must be 0 or greater.
-- Fixed value must be 0 or greater.
-- Product name required.
-- Category required.
-- Purity required.
-- Item code must be unique.
-
-Checkout:
-
-- Cart must have at least one item.
-- Every item must exist.
-- Every item must be available.
-- Customer phone is optional, but if entered should be valid.
-
-Rate override:
-
-- Gold 24K override must be within a reasonable range.
-- Silver override must be within a reasonable range.
-- Show that override is active.
-
-Suggested ranges:
+## 📁 Project Structure
 
 ```txt
-Gold 24K: 1000 to 30000 INR/gram
-Silver: 10 to 1000 INR/gram
+okcredit-hackathon/
+├── src/
+│   ├── lib/
+│   │   ├── assets/           # Default UI assets
+│   │   ├── db.js             # MongoDB Atlas client initializer & credentials seeder
+│   │   ├── mongoUri.js       # URI sanitization helper
+│   │   ├── normalizeProduct.js # Normalization wrapper for database documents
+│   │   └── rateFetcher.js    # SignalR/Gzip decoding and WebSocket handler
+│   ├── routes/
+│   │   ├── api/
+│   │   │   ├── invoices/     # Endpoint to record sales/resales
+│   │   │   ├── products/     # Endpoint to query/update inventory
+│   │   │   └── rates/        # Bullion rate check endpoint
+│   │   ├── +layout.svelte    # Global layout structure
+│   │   └── +page.svelte      # Monolithic POS, Inventory, and Calculator Dashboard
+└── package.json
 ```
 
-## 17. Acceptance Criteria
+---
 
-The build is complete when:
+## 🔌 API Specifications
 
-1. The app is built in React.
-2. The dashboard loads products from MongoDB.
-3. New stock items are saved to MongoDB.
-4. Every new item receives a unique barcode ID.
-5. Barcode label preview and download works.
-6. Product valuations use live rates.
-7. Live rates refresh automatically from API/database.
-8. Rate feed fallback works if the WebSocket fails.
-9. Manual rate override updates all valuations immediately.
-10. The stock catalog can search and filter products.
-11. The webcam scanner can find products by barcode.
-12. The cart can add/remove items.
-13. Checkout creates a sale record in MongoDB.
-14. Sold products are no longer shown as available stock.
-15. Invoice modal appears after checkout and can be printed.
-16. Walk-in calculator uses the same active rates.
-17. Recent feed logs are shown in the dashboard.
-18. The app is responsive on desktop, tablet, and mobile.
-19. Sensitive database credentials remain server-side only.
-20. The app can be deployed with documented environment variables.
+### 📦 Products Endpoint
 
-## 18. Suggested AI Studio / Antigravity Prompt
+* **`GET /api/products`**
+  Returns the active available product list from the catalog.
+  * *Response Example (200 OK):*
+    ```json
+    {
+      "success": true,
+      "products": [
+        {
+          "id": "GLD-RNG294",
+          "name": "22K Gold Ring",
+          "purity": "22K",
+          "weight": 5.4,
+          "makingCharge": 0.12,
+          "fixedValue": 0,
+          "category": "Ring",
+          "description": "Premium 22K gold ring added on 7/5/2026."
+        }
+      ]
+    }
+    ```
 
-Use this prompt to generate the React version:
+* **`POST /api/products`**
+  Inserts a new product into the database.
+  * *Payload Required:*
+    ```json
+    {
+      "id": "GLD-RNG294",
+      "name": "Premium 22K Gold Ring",
+      "purity": "22K",
+      "weight": 5.4,
+      "makingCharge": 0.12,
+      "fixedValue": 0,
+      "category": "Ring",
+      "description": "Hand-crafted 22K gold ring."
+    }
+    ```
 
-```txt
-Build a production-ready React application for Sunrise Fine Jewells, a jewellery store inventory, live bullion valuation, barcode, and sales dashboard.
+* **`DELETE /api/products`**
+  Deletes or archives sold items from the inventory.
+  * *Payload Required:*
+    ```json
+    {
+      "ids": ["GLD-RNG294"]
+    }
+    ```
 
-Important: Use the React framework. Do not use Svelte. Prefer React + Vite with a Node/Express backend, or Next.js with API routes if you want a full-stack React framework.
+---
 
-The app must connect stock inventory to MongoDB. Products must be loaded from the database, new products must be saved to the database, and sold products must be marked as sold in the database.
+### 📄 Invoices Endpoint
 
-Core features:
-- Live bullion rates for 24K gold, 22K gold, 18K gold, and silver.
-- Backend rate fetcher that reads the Ambicaa bullion WebSocket feed, decodes base64 gzip JSON payloads, extracts gold/silver ask prices, stores latest rates in MongoDB, and exposes GET /api/rates.
-- Frontend should refresh rates automatically every 5 seconds or use SSE/WebSocket streaming.
-- Manual owner rate override for 24K gold and silver.
-- Product valuation recalculates automatically from active rates.
-- Stock entry form with category, metal, purity, weight, making charge percent, fixed gemstone value, name, description, and image.
-- Unique barcode item codes like RNG-YYYYMMDD-001.
-- Barcode label preview and PNG download.
-- Stock valuation catalog with search, filters, barcode preview, price breakdown, and actions.
-- Webcam barcode scanner using html5-qrcode.
-- Valuation audit modal showing metal value, making charge, fixed value, subtotal, GST, and total.
-- Cart drawer for selling items.
-- Checkout flow that creates a sales/invoice record, captures a rate snapshot, marks products as sold, and shows printable invoice.
-- Walk-in calculator for quick quotes.
-- Recent live feed log console.
+* **`POST /api/invoices`**
+  Processes POS checkouts, capturing transaction snapshots.
+  * *Payload Required:*
+    ```json
+    {
+      "invoiceId": "SRF-384729",
+      "date": "7/8/2026, 9:35:08 PM",
+      "customerName": "Ramesh Gowda",
+      "customerPhone": "9845012345",
+      "items": [
+        {
+          "id": "GLD-RNG801",
+          "name": "Premium 22K Gold Ring",
+          "purity": "22K",
+          "weight": 4.8,
+          "ratePerGram": 7200,
+          "totalPrice": 39715
+        }
+      ],
+      "totalWeight": 4.8,
+      "subtotal": 38558,
+      "gst": 1157,
+      "total": 39715,
+      "resaleItems": [
+        {
+          "id": "RSL-991823",
+          "name": "Old Gold Scrap",
+          "purity": "22K",
+          "weight": 5.5,
+          "rate": 7100,
+          "grossValue": 39050,
+          "deduction": 550,
+          "finalValue": 38500
+        }
+      ],
+      "totalResaleWeight": 5.5,
+      "totalResaleValue": 38500,
+      "netPayable": 1215
+    }
+    ```
 
-Pricing rules:
-- gold24kPerGram = Math.round(goldAsk / 10)
-- gold22kPerGram = Math.round(gold24kPerGram * 22 / 24)
-- gold18kPerGram = Math.round(gold24kPerGram * 18 / 24)
-- silverPerGram = Math.round((silverAsk / 1000) * 100) / 100
-- metalValue = weightGrams * ratePerGram
-- makingCharge = metalValue * (makingChargePercent / 100)
-- subtotal = metalValue + makingCharge + fixedValue
-- gst = subtotal * 0.03
-- total = subtotal + gst
+---
 
-Use MongoDB collections: products, rates, rate_history, sales, audit_logs.
+## 🧮 Core Business Logic & Valuation Formulas
 
-Make the UI a premium internal jewellery dashboard: warm off-white background, antique gold accents, clear tables, responsive layout, and a practical counter-sales workflow. The first screen should be the working dashboard, not a landing page.
+The dynamic valuation of gold and silver jewelry is governed by these standardized formulas:
 
-Include all required environment variables, setup instructions, and seed data. Make sure the app can run locally and be deployed.
-```
+$$\text{Metal Value} = \text{Weight (g)} \times \text{Spot Rate per Gram}$$
 
-## 19. Local Development Notes
+$$\text{Making Charges} = \text{Metal Value} \times \text{Making Charge Fraction}$$
 
-For a React + Vite frontend with Express backend:
+$$\text{Subtotal} = \text{Metal Value} + \text{Making Charges} + \text{Gemstone/Fixed Value}$$
 
-```txt
-npm create vite@latest sunrise-jewells-react -- --template react
-cd sunrise-jewells-react
-npm install
-npm install @tanstack/react-query html5-qrcode jsbarcode zustand
-npm install express mongodb ws cors dotenv
-npm install -D nodemon concurrently
-```
+$$\text{GST} = \text{Subtotal} \times 0.03$$
 
-Suggested scripts:
+$$\text{Total Invoice Cost} = \text{Subtotal} + \text{GST}$$
 
-```json
-{
-  "scripts": {
-    "dev": "concurrently \"npm run dev:client\" \"npm run dev:server\"",
-    "dev:client": "vite",
-    "dev:server": "nodemon server/index.js",
-    "build": "vite build",
-    "preview": "vite preview"
-  }
-}
-```
+For resale or scrap buybacks, the valuation uses direct calculations:
 
-For Next.js:
+$$\text{Gross Resale Value} = \text{Resale Weight} \times \text{Purity Spot Rate}$$
 
-```txt
-npx create-next-app@latest sunrise-jewells-react
-cd sunrise-jewells-react
-npm install mongodb html5-qrcode jsbarcode zustand @tanstack/react-query
-```
+$$\text{Final Resale Value} = \text{Gross Resale Value} - \text{Deductions}$$
 
-## 20. Seed Data
+$$\text{Net Payable/Receivable} = \text{Total Purchase Value} - \text{Total Resale Value}$$
 
-Use sample products similar to:
+---
 
-```json
-[
-  {
-    "itemCode": "GLD-N001",
-    "name": "Celestial Gold Necklace",
-    "category": "Necklace",
-    "metal": "Gold",
-    "purity": "22K",
-    "weightGrams": 45,
-    "makingChargePercent": 12,
-    "fixedValue": 0,
-    "description": "A traditional 22K gold necklace with intricate floral patterns.",
-    "imageUrl": "",
-    "status": "available"
-  },
-  {
-    "itemCode": "GLD-R002",
-    "name": "Stellar Diamond Ring",
-    "category": "Ring",
-    "metal": "Gold",
-    "purity": "18K",
-    "weightGrams": 5,
-    "makingChargePercent": 15,
-    "fixedValue": 55000,
-    "description": "An elegant solitaire diamond ring with an 18K gold band.",
-    "imageUrl": "",
-    "status": "available"
-  }
-]
-```
+## 📖 Usage Guide
 
-Seed rates:
+### 1. Adding Stock to Inventory
+1. Click the **Add Stock** tab.
+2. Select your category (Ring, Necklace, etc.).
+3. Choose the metal and purity (24K Gold, 22K Gold, 18K Gold, or Silver).
+4. Enter the item's weight in grams.
+5. Set the making charge (as a percentage, e.g. `12%`).
+6. Press **Add to Stock**. The barcode will generate, and the item will appear in your catalog.
 
-```json
-{
-  "key": "latest_rates",
-  "gold24kPerGram": 15485,
-  "gold22kPerGram": 14195,
-  "gold18kPerGram": 11614,
-  "silverPerGram": 266.16,
-  "source": "seed",
-  "timestamp": "2026-06-10T00:00:00.000Z",
-  "stale": true,
-  "logs": []
-}
-```
+### 2. Barcode Scanning
+1. Open the barcode scanner modal on the dashboard.
+2. Grant camera permissions.
+3. Position the jewellery tag in front of the camera. The item is automatically resolved in your catalog and can be added directly to the cart.
 
-## 21. Final Build Checklist
+### 3. Exchanging / Buying Back Items (Resale)
+1. Go to the **Resale/Exchange** tab.
+2. Input the old metal type, purity, weight, and any flat deduction.
+3. Click **Add to Resale Cart**.
+4. Review the cart. The unified totals will calculate the net balance.
+5. Complete checkout to render the appropriate **Tax Invoice** or **Purchase Voucher**.
 
-Before considering the rebuild done:
+---
 
-- Run lint and build.
-- Test adding a product.
-- Confirm the product appears after browser refresh.
-- Confirm the database contains the product.
-- Confirm barcode label preview/download.
-- Confirm live rate API returns data.
-- Confirm valuations change when rates change.
-- Confirm manual override changes valuations.
-- Confirm scanner can find an item.
-- Confirm checkout creates a sale.
-- Confirm sold item disappears from available catalog.
-- Confirm invoice prints cleanly.
-- Confirm mobile layout does not overflow.
-- Confirm environment variables are documented.
+## ⚠️ Troubleshooting
 
+### 🔌 MongoDB Connection Timeouts
+> [!IMPORTANT]
+> If you deploy this project to Vercel and notice that the dashboard says *"No invoices found matching current filters"* or fails to load data, ensure that your MongoDB Atlas cluster allows connection requests from Vercel's serverless environment:
+> 1. Go to **Network Access** in your MongoDB Atlas console.
+> 2. Add an IP address rule: `0.0.0.0/0` (Allow Access From Anywhere). Vercel uses dynamic IPs, so restricting access to a single IP will block your cloud deployment.
+
+### 📸 Webcam Scanner Not Launching
+* Ensure your website is served over a secure connection (`https://`). Browsers block hardware access (like webcams) on unencrypted `http` connections.
+* Go to site settings in your browser and verify that camera permissions are set to **Allow**.
+
+### ⏰ Timezone Discrepancy on Invoices
+* Vercel server runtimes are set to UTC by default. The date calculations in SvelteKit have been optimized using UTC methods (`setUTCHours`) to prevent date filters from misaligning by timezone offsets.
+
+---
+
+## 🤝 Contributing
+
+Contributions are welcome! Please follow these guidelines:
+1. Fork the project.
+2. Create your feature branch (`git checkout -b feature/AmazingFeature`).
+3. Commit your changes (`git commit -m 'Add some AmazingFeature'`).
+4. Push to the branch (`git push origin feature/AmazingFeature`).
+5. Open a Pull Request.
+
+---
+
+## 📄 License
+
+Distributed under the MIT License. See [LICENSE](LICENSE) for more details.
