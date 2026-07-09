@@ -72,8 +72,23 @@ export async function POST({ request }) {
     // Ensure invoice has a standard createdAt date
     invoice.createdAt = invoice.createdAt ? new Date(invoice.createdAt) : new Date();
 
+    // Generate dynamic structured invoice ID: PREFIX-YYYYMMDD-000001
+    const dateObj = invoice.createdAt;
+    const yyyy = dateObj.getFullYear();
+    const mm = String(dateObj.getMonth() + 1).padStart(2, "0");
+    const dd = String(dateObj.getDate()).padStart(2, "0");
+    const dateStr = `${yyyy}${mm}${dd}`;
+    const prefix = invoice.items.length === 0 ? "PUR" : "SRF";
+
+    const pattern = new RegExp(`^${prefix}-${dateStr}-\\d{6}$`);
+    const count = await db.collection('invoice').countDocuments({
+      invoiceId: { $regex: pattern }
+    });
+    const seq = String(count + 1).padStart(6, "0");
+    invoice.invoiceId = `${prefix}-${dateStr}-${seq}`;
+
     const result = await db.collection('invoice').insertOne(invoice);
-    return jsonResponse({ success: true, id: result.insertedId });
+    return jsonResponse({ success: true, id: result.insertedId, invoiceId: invoice.invoiceId });
   } catch (error) {
     return jsonResponse({ success: false, error: error.message }, 500);
   }

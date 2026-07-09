@@ -816,11 +816,15 @@
 
         // Save invoice to MongoDB
         try {
-          await fetch("/api/invoices", {
+          const postRes = await fetch("/api/invoices", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify(invoiceData),
           });
+          const resData = await postRes.json();
+          if (resData.success && resData.invoiceId) {
+            invoiceData.invoiceId = resData.invoiceId;
+          }
           fetchSalesLedger(); // Refresh manager ledger
         } catch (err) {
           console.error("Failed to post invoice to MongoDB:", err);
