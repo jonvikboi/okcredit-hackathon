@@ -115,7 +115,7 @@
     "_id": "6a2ba4ccfac4178c4f50582b"
   },
   {
-    "id": "GLD-ERR831",
+    "id": "ERR-20260704-002",
     "name": "Premium 18K Gold Earrings",
     "purity": "18K",
     "weight": 17.37,
@@ -129,7 +129,7 @@
     "_id": "6a4e73d95432e1292433014b"
   },
   {
-    "id": "GLD-ERR377",
+    "id": "ERR-20260704-001",
     "name": "Premium 22K Gold Earrings",
     "purity": "22K",
     "weight": 13.59,
@@ -143,7 +143,7 @@
     "_id": "6a4e73d95432e1292433014c"
   },
   {
-    "id": "GLD-WTC751",
+    "id": "WCH-20260707-001",
     "name": "Premium 18K Gold Watch",
     "purity": "18K",
     "weight": 11.7,
@@ -157,7 +157,7 @@
     "_id": "6a4e73d95432e1292433014d"
   },
   {
-    "id": "GLD-WTC270",
+    "id": "WCH-20260706-002",
     "name": "Premium 22K Gold Watch",
     "purity": "22K",
     "weight": 26.31,
@@ -171,7 +171,7 @@
     "_id": "6a4e73d95432e1292433014e"
   },
   {
-    "id": "GLD-WTC148",
+    "id": "WCH-20260706-001",
     "name": "Premium 22K Gold Watch",
     "purity": "22K",
     "weight": 38.64,
@@ -185,7 +185,7 @@
     "_id": "6a4e73d95432e1292433014f"
   },
   {
-    "id": "GLD-RNG772",
+    "id": "RNG-20260705-002",
     "name": "Premium 24K Gold Ring",
     "purity": "24K",
     "weight": 11.45,
@@ -199,7 +199,7 @@
     "_id": "6a4e73d95432e12924330150"
   },
   {
-    "id": "GLD-BRC223",
+    "id": "BRC-20260706-001",
     "name": "Premium 22K Gold Bracelet",
     "purity": "22K",
     "weight": 6.9,
@@ -213,7 +213,7 @@
     "_id": "6a4e73d95432e12924330151"
   },
   {
-    "id": "GLD-RNG801",
+    "id": "RNG-20260705-001",
     "name": "Premium 24K Gold Ring",
     "purity": "24K",
     "weight": 17.09,
@@ -227,7 +227,7 @@
     "_id": "6a4e73d95432e12924330152"
   },
   {
-    "id": "GLD-NCK407",
+    "id": "NKL-20260703-001",
     "name": "Premium 22K Gold Necklace",
     "purity": "22K",
     "weight": 14.56,
@@ -241,7 +241,7 @@
     "_id": "6a4e74bd5432e12924330153"
   },
   {
-    "id": "GLD-RNG991",
+    "id": "RNG-20260703-001",
     "name": "Premium 22K Gold Ring",
     "purity": "22K",
     "weight": 2.46,
@@ -255,7 +255,7 @@
     "_id": "6a4e74be5432e12924330154"
   },
   {
-    "id": "GLD-BRC664",
+    "id": "BRC-20260703-002",
     "name": "Premium 24K Gold Bracelet",
     "purity": "24K",
     "weight": 6.71,
@@ -269,7 +269,7 @@
     "_id": "6a4e74be5432e12924330155"
   },
   {
-    "id": "GLD-BRC306",
+    "id": "BRC-20260703-001",
     "name": "Premium 22K Gold Bracelet",
     "purity": "22K",
     "weight": 3.25,
@@ -283,7 +283,7 @@
     "_id": "6a4e74be5432e12924330156"
   },
   {
-    "id": "GLD-NCK290",
+    "id": "NKL-20260703-002",
     "name": "Premium 24K Gold Necklace",
     "purity": "24K",
     "weight": 14.56,
@@ -297,7 +297,7 @@
     "_id": "6a4e74be5432e12924330157"
   },
   {
-    "id": "GLD-RNG449",
+    "id": "RNG-20260703-002",
     "name": "Premium 24K Gold Ring",
     "purity": "24K",
     "weight": 9.82,
@@ -311,7 +311,7 @@
     "_id": "6a4e74be5432e12924330158"
   },
   {
-    "id": "GLD-WTC306",
+    "id": "WCH-20260703-001",
     "name": "Premium 24K Gold Watch",
     "purity": "24K",
     "weight": 12.18,
@@ -325,7 +325,7 @@
     "_id": "6a4e74be5432e12924330159"
   },
   {
-    "id": "GLD-BRC655",
+    "id": "BRC-20260704-001",
     "name": "Premium 18K Gold Bracelet",
     "purity": "18K",
     "weight": 14.02,
@@ -339,7 +339,7 @@
     "_id": "6a4e74be5432e1292433015a"
   },
   {
-    "id": "GLD-RNG355",
+    "id": "RNG-20260704-002",
     "name": "Premium 18K Gold Ring",
     "purity": "18K",
     "weight": 6.26,
@@ -353,7 +353,7 @@
     "_id": "6a4e74be5432e1292433015b"
   },
   {
-    "id": "GLD-RNG255",
+    "id": "RNG-20260704-003",
     "name": "Premium 24K Gold Ring",
     "purity": "24K",
     "weight": 14.98,
@@ -367,7 +367,7 @@
     "_id": "6a4e74be5432e1292433015c"
   },
   {
-    "id": "GLD-WTC594",
+    "id": "WCH-20260704-001",
     "name": "Premium 24K Gold Watch",
     "purity": "24K",
     "weight": 13.01,
@@ -381,7 +381,7 @@
     "_id": "6a4e74be5432e1292433015d"
   },
   {
-    "id": "GLD-ERR122",
+    "id": "ERR-20260704-003",
     "name": "Premium 18K Gold Earrings",
     "purity": "18K",
     "weight": 12.9,
@@ -395,7 +395,7 @@
     "_id": "6a4e74be5432e1292433015e"
   },
   {
-    "id": "GLD-ERR352",
+    "id": "ERR-20260704-004",
     "name": "Premium 24K Gold Earrings",
     "purity": "24K",
     "weight": 10.85,
@@ -409,7 +409,7 @@
     "_id": "6a4e74be5432e1292433015f"
   },
   {
-    "id": "GLD-RNG100",
+    "id": "RNG-20260704-001",
     "name": "Premium 22K Gold Ring",
     "purity": "22K",
     "weight": 14.81,
@@ -423,7 +423,7 @@
     "_id": "6a4e74be5432e12924330160"
   },
   {
-    "id": "GLD-WTC516",
+    "id": "WCH-20260705-001",
     "name": "Premium 18K Gold Watch",
     "purity": "18K",
     "weight": 4.05,
@@ -437,7 +437,7 @@
     "_id": "6a4e74be5432e12924330161"
   },
   {
-    "id": "GLD-BRC987",
+    "id": "BRC-20260705-002",
     "name": "Premium 22K Gold Bracelet",
     "purity": "22K",
     "weight": 8.71,
@@ -451,7 +451,7 @@
     "_id": "6a4e74be5432e12924330162"
   },
   {
-    "id": "GLD-ERR944",
+    "id": "ERR-20260705-001",
     "name": "Premium 18K Gold Earrings",
     "purity": "18K",
     "weight": 9.61,
@@ -465,7 +465,7 @@
     "_id": "6a4e74be5432e12924330163"
   },
   {
-    "id": "GLD-NCK239",
+    "id": "NKL-20260705-002",
     "name": "Premium 24K Gold Necklace",
     "purity": "24K",
     "weight": 8.98,
@@ -479,7 +479,7 @@
     "_id": "6a4e74bf5432e12924330164"
   },
   {
-    "id": "GLD-RNG944",
+    "id": "RNG-20260705-003",
     "name": "Premium 18K Gold Ring",
     "purity": "18K",
     "weight": 14.66,
@@ -493,7 +493,7 @@
     "_id": "6a4e74bf5432e12924330165"
   },
   {
-    "id": "GLD-NCK621",
+    "id": "NKL-20260705-003",
     "name": "Premium 24K Gold Necklace",
     "purity": "24K",
     "weight": 11.59,
@@ -507,7 +507,7 @@
     "_id": "6a4e74bf5432e12924330166"
   },
   {
-    "id": "GLD-BRC685",
+    "id": "BRC-20260705-001",
     "name": "Premium 18K Gold Bracelet",
     "purity": "18K",
     "weight": 14.07,
@@ -521,7 +521,7 @@
     "_id": "6a4e74bf5432e12924330167"
   },
   {
-    "id": "GLD-NCK678",
+    "id": "NKL-20260705-001",
     "name": "Premium 18K Gold Necklace",
     "purity": "18K",
     "weight": 9.1,
@@ -535,7 +535,7 @@
     "_id": "6a4e74bf5432e12924330168"
   },
   {
-    "id": "GLD-RNG129",
+    "id": "RNG-20260706-001",
     "name": "Premium 24K Gold Ring",
     "purity": "24K",
     "weight": 13.88,
@@ -549,7 +549,7 @@
     "_id": "6a4e74bf5432e12924330169"
   },
   {
-    "id": "GLD-WTC574",
+    "id": "WCH-20260706-003",
     "name": "Premium 22K Gold Watch",
     "purity": "22K",
     "weight": 11,
@@ -563,7 +563,7 @@
     "_id": "6a4e74bf5432e1292433016a"
   },
   {
-    "id": "GLD-RNG499",
+    "id": "RNG-20260706-002",
     "name": "Premium 24K Gold Ring",
     "purity": "24K",
     "weight": 13.63,
@@ -577,7 +577,7 @@
     "_id": "6a4e74bf5432e1292433016b"
   },
   {
-    "id": "GLD-BRC243",
+    "id": "BRC-20260706-002",
     "name": "Premium 24K Gold Bracelet",
     "purity": "24K",
     "weight": 6.5,
@@ -591,7 +591,7 @@
     "_id": "6a4e74bf5432e1292433016c"
   },
   {
-    "id": "GLD-ERR706",
+    "id": "ERR-20260706-001",
     "name": "Premium 24K Gold Earrings",
     "purity": "24K",
     "weight": 11.27,
@@ -605,7 +605,7 @@
     "_id": "6a4e74bf5432e1292433016d"
   },
   {
-    "id": "GLD-WTC555",
+    "id": "WCH-20260706-004",
     "name": "Premium 18K Gold Watch",
     "purity": "18K",
     "weight": 7.08,
@@ -619,7 +619,7 @@
     "_id": "6a4e74bf5432e1292433016e"
   },
   {
-    "id": "GLD-WTC841",
+    "id": "WCH-20260706-005",
     "name": "Premium 22K Gold Watch",
     "purity": "22K",
     "weight": 9.64,
@@ -633,7 +633,7 @@
     "_id": "6a4e74bf5432e1292433016f"
   },
   {
-    "id": "GLD-NCK148",
+    "id": "NKL-20260706-001",
     "name": "Premium 18K Gold Necklace",
     "purity": "18K",
     "weight": 4.94,
@@ -647,7 +647,7 @@
     "_id": "6a4e74bf5432e12924330170"
   },
   {
-    "id": "GLD-BRC984",
+    "id": "BRC-20260706-003",
     "name": "Premium 24K Gold Bracelet",
     "purity": "24K",
     "weight": 8.61,
@@ -661,7 +661,7 @@
     "_id": "6a4e74bf5432e12924330171"
   },
   {
-    "id": "GLD-NCK866",
+    "id": "NKL-20260707-001",
     "name": "Premium 22K Gold Necklace",
     "purity": "22K",
     "weight": 2.93,
@@ -675,7 +675,7 @@
     "_id": "6a4e74bf5432e12924330172"
   },
   {
-    "id": "GLD-BRC923",
+    "id": "BRC-20260707-002",
     "name": "Premium 18K Gold Bracelet",
     "purity": "18K",
     "weight": 9.44,
@@ -689,7 +689,7 @@
     "_id": "6a4e74bf5432e12924330173"
   },
   {
-    "id": "GLD-ERR924",
+    "id": "ERR-20260707-001",
     "name": "Premium 24K Gold Earrings",
     "purity": "24K",
     "weight": 1.1,
@@ -703,7 +703,7 @@
     "_id": "6a4e74c05432e12924330174"
   },
   {
-    "id": "GLD-RNG197",
+    "id": "RNG-20260707-001",
     "name": "Premium 24K Gold Ring",
     "purity": "24K",
     "weight": 6.8,
@@ -717,7 +717,7 @@
     "_id": "6a4e74c05432e12924330175"
   },
   {
-    "id": "GLD-BRC193",
+    "id": "BRC-20260707-001",
     "name": "Premium 22K Gold Bracelet",
     "purity": "22K",
     "weight": 1.04,
@@ -731,7 +731,7 @@
     "_id": "6a4e74c05432e12924330176"
   },
   {
-    "id": "GLD-RNG444",
+    "id": "RNG-20260707-003",
     "name": "Premium 18K Gold Ring",
     "purity": "18K",
     "weight": 6.08,
@@ -745,7 +745,7 @@
     "_id": "6a4e74c05432e12924330177"
   },
   {
-    "id": "GLD-RNG266",
+    "id": "RNG-20260707-002",
     "name": "Premium 24K Gold Ring",
     "purity": "24K",
     "weight": 3.9,
@@ -759,7 +759,7 @@
     "_id": "6a4e74c05432e12924330178"
   },
   {
-    "id": "GLD-WTC904",
+    "id": "WCH-20260707-002",
     "name": "Premium 22K Gold Watch",
     "purity": "22K",
     "weight": 6.37,
